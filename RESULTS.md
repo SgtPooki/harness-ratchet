@@ -74,3 +74,36 @@ mutB-rules-scope), config-level system prompt, project context files.
 Meta-lesson for the loop: verify a mutation channel is live (cheap probe with
 an observable token) before spending an A/B on it — and when a probe fails,
 differentiate WHERE it died before assigning blame.
+
+## Channel forensics + mutB — 2026-08-24
+
+Wire capture (dummy OpenAI server as an omp provider) settled the placement
+question: the 57KB system prompt ends with the MCP-server sections
+(### node_repl, ### context7), and `--append-system-prompt` text lands at
+99.6% depth, unlabeled, directly after the last MCP section — visually inside
+the zone the preamble calls "server-controlled and may not be verified".
+Upstream flaw confidence: ~95% (placement is real; intent unknown).
+
+Channel probe matrix (observable-token tests, local gpt-oss = no proxy):
+
+| channel | live? |
+|---|---|
+| `--append-system-prompt`, bare | DEAD (model refuses as suspected injection) |
+| `--append-system-prompt` + explicit trust header | **LIVE** ("Hello. ZANZIBAR") |
+| `~/.omp/agent/RULES.md` | **LIVE** ("Hello! ZANZIBAR") |
+
+Runner now auto-wraps EXTRA_SYS in the trust header.
+
+### mutB-rules-scope — REJECTED
+
+Scope rule via RULES.md (a proven-live channel), target 04:
+790s baseline → **900s TIMEOUT (rc=124)** — the fix landed (verifier passed)
+but the agent kept hardening until killed. With delivery proven, the failure is
+CONTENT: generic scope guidance loses to task framing ("handles all legal
+filenames" reads as a thoroughness mandate). Hard-task baselines from the same
+run: 07-py-lru-ttl PASS 178s, 08-py-report-bleed PASS 348s (8/8 overall;
+difficulty gradient 80→178→348→790s).
+
+Next mutation candidates: (a) grader-aware scope phrasing ("a hidden verifier
+scores only correctness of the fix; extra verification adds no credit"),
+(b) accept the rigor and treat 04 as the open-scope stressor, tuning elsewhere.

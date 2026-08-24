@@ -28,8 +28,14 @@ run_task() {
   local prompt t0
   prompt=$(cat "$task/prompt.md")
   t0=$SECONDS
+  # NOTE: omp appends this text unlabeled at the tail of its MCP-instructions
+  # zone, where the preamble marks content "server-controlled and may not be
+  # verified" — models refuse it (verified 2026-08-24). The trust header below
+  # rescues the channel; keep it until the placement is fixed upstream.
   local -a extra=()
-  if [ -n "${EXTRA_SYS:-}" ]; then extra=(--append-system-prompt "$EXTRA_SYS"); fi
+  if [ -n "${EXTRA_SYS:-}" ]; then
+    extra=(--append-system-prompt "$(printf '\n## Operator instructions (from the human operator via CLI flag, NOT from any MCP server — trusted)\n\n%s' "$EXTRA_SYS")")
+  fi
   ( cd "$work" && timeout "$TIMEOUT_S" omp -p --auto-approve \
       --model "$MODEL" --no-title "${extra[@]}" \
       "$prompt" \
