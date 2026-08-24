@@ -28,13 +28,9 @@ run_verify() { # $1=task dir  $2=workspace copy
 run_rollout() { # $1=task name  $2=rollout index
   local name="$1" i="$2" task="tasks/$1"
   local rdir="$RUNDIR/$name/run_$i" work
-  # Isolation: the agent works in a temp dir OUTSIDE this repo (weakness
-  # mining caught agents wandering into runs/ and reading their own live
-  # session streams when work dirs lived in-repo). Copied back post-run for
-  # verification, veto, and mining.
-  work=$(mktemp -d "${TMPDIR:-/tmp}/ratchet-work-XXXXXX")
+  work="$rdir/work"
   mkdir -p "$rdir"
-  cp -R "$task/workspace/." "$work/"
+  rm -rf "$work"; cp -R "$task/workspace" "$work"
 
   local prompt t0
   prompt=$(cat "$task/prompt.md")
@@ -45,22 +41,16 @@ run_rollout() { # $1=task name  $2=rollout index
   if [ -n "${EXTRA_SYS:-}" ]; then
     extra=(--append-system-prompt "$(printf '\n## Operator instructions (from the human operator via CLI flag, NOT from any MCP server — trusted)\n\n%s' "$EXTRA_SYS")")
   fi
-  # Infrastructure config (always on): advisor-off isolation.
-  extra+=(--config "$(pwd)/mutations/eval-isolation.yml")
   # EXTRA_CONFIG: repo-relative omp --config overlay = the mutation artifact.
   if [ -n "${EXTRA_CONFIG:-}" ]; then extra+=(--config "$(pwd)/$EXTRA_CONFIG"); fi
-  local rdir_abs
-  rdir_abs=$(cd "$rdir" && pwd)
   ( cd "$work" && timeout "$TIMEOUT_S" omp -p --auto-approve \
       --model "$MODEL" --no-title --mode json "${extra[@]}" \
       "$prompt" \
-      >"$rdir_abs/stream.jsonl" 2>"$rdir_abs/stderr.txt" )
+      >"../stream.jsonl" 2>"../stderr.txt" )
   local rc=$? dur=$((SECONDS - t0))
 
   local vout pass
   vout=$(run_verify "$task" "$work")
-  # Archive the workspace back into the run dir; the temp dir goes away.
-  rm -rf "$rdir/work"; cp -R "$work" "$rdir/work"; rm -rf "$work"; work="$rdir/work"
   if echo "$vout" | grep -q '^PASS$' && [ "$rc" -eq 0 ]; then pass=true; else pass=false; fi
 
   RDIR="$rdir" NAME="$name" I="$i" MODEL="$MODEL" LABEL="$LABEL" PASS="$pass" \
@@ -80,9 +70,7 @@ try:
             tok_out += u.get("output", 0) or 0
 except OSError:
     pass
-import time
 rec = {
-    "ts": int(time.time()),
     "task": os.environ["NAME"], "rollout": int(os.environ["I"]),
     "model": os.environ["MODEL"], "label": os.environ["LABEL"],
     "pass": os.environ["PASS"] == "true", "agent_rc": int(os.environ["RC"]),
