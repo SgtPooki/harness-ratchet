@@ -72,6 +72,22 @@ What was refined by review:
 4. Playbook collapse/bloat (ACE's own catalog): delta-only updates, size cap,
    Generator/Reflector/Curator separation.
 
+## Prior art (OSS, surveyed 2026-08-24)
+
+- neosigmaai/auto-harness (535★, MIT): closest loop shape (failure mining →
+  self-edit → 3-step regression gate). Missing: task generation, verifier
+  audit, local-model support. Watch; steal gate patterns.
+- china-qijizhifeng/agentic-harness-engineering (848★): official AHE code;
+  benchmark-consuming, sized ~100x our throughput.
+- Ker102/Harneloop (alpha, Apache-2): evidence-gated promotion, BYO-agent,
+  user-supplied tasks, no verifier audit.
+- Field overview: Lilian Weng "Harness Engineering for Self-Improvement"
+  (2026-07); awesome-harness-engineering; Awesome-Self-Improving-Agents.
+
+Our unshipped-anywhere combination: own-repo task minting with
+human-written-at-origin oracles + sabotage verifier audit + fully-local
+(single 5090 + Mac advisor) operation.
+
 ## Build order
 
 1. ✓ Oracle sabotage audit (this commit)
