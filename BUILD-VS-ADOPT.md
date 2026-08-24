@@ -18,6 +18,43 @@ peer review (codex "C-minus", cursor "A′", gemini "Ruthless A") converged:
   starvation later (excision miner is cycle 2), omp-overfitting (accepted —
   omp IS the product; portability was explicitly secondary).
 
+## Round-2 cross-examination (each reviewer saw all round-1 reviews)
+
+Verdicts: codex CONFIRM, cursor CONFIRM-with-AMEND, gemini AMEND. Strategic
+decision unchanged (build forward, no adapter, no chassis adoption — the
+auto-harness claim was re-validated against its README with narrower wording:
+"does not directly fit improving omp without refactoring", not "cannot ever").
+
+New defects round 2 caught that round 1 (and we) missed:
+
+1. **`pass=true` on timeout** (cursor): mutB recorded pass=true with rc=124 —
+   gate success must be composite: `verifier PASS && agent_rc==0`.
+2. **run.sh clobbers rollouts** (gemini): `rm -rf $work` + fixed transcript
+   path destroy the first rollout's evidence — k=2 needs `run_$k` subdirs
+   structurally, not just gate math.
+3. **No pinned task split** (codex): without a committed held-in/held-out/
+   sentinel assignment file, k=2 comparisons aren't stable and the loop can
+   move its own goalposts.
+4. **The 8/8-pass trap** (gemini): with pass saturated, a pass+duration gate
+   optimizes ONLY duration → promotes laziness. Accepted-with-guard: held-out
+   pass non-regression is the hard floor (laziness that breaks correctness
+   shows up there); token telemetry added so duration isn't the sole soft
+   axis; REVISIT when the excision miner restores pass headroom.
+5. Four-axis Pareto is aspirational (cursor): no token/tool telemetry exists
+   yet; gate v1 = pass (hard) + duration_p50 + tokens (soft).
+6. Manifest: minimal local `manifest.json` (mutation id, surfaces, probe
+   results, rollback target) — no Harneloop dependency (cursor/gemini,
+   overriding codex's heavier version).
+
+**AMENDED single first action (supersedes the round-1 one):**
+(1) Fix run.sh: `run_$k` subdirs, composite pass, token extraction from
+transcripts; (2) commit a pinned `split.json` (held-in/held-out/sentinel);
+(3) implement `bin/gate.sh` as a SEPARATE script reading results.jsonl —
+k=2 aggregation, held-out pass non-regression (hard), min-effect-size on soft
+axes, minimal manifest emission; (4) prove end-to-end by mechanically
+REJECTING mutB-rules-scope vs baseline using data already in runs/.
+No adapter YAML, no chassis adoption, no new tasks until the gate stands.
+
 Original decision framing follows.
 
 ---

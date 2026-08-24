@@ -88,11 +88,17 @@ Our unshipped-anywhere combination: own-repo task minting with
 human-written-at-origin oracles + sabotage verifier audit + fully-local
 (single 5090 + Mac advisor) operation.
 
-## Build order
+## Build order (reordered per round-2 review consensus — gate first)
 
-1. ✓ Oracle sabotage audit (this commit)
-2. Simplicity-veto judge wired into run.sh post-verify (gpt-oss)
-3. Pareto ledger fields in results.jsonl + k=2 rollouts
-4. FeatureBench-style excision miner over homelab2/engops/vllm-proxy
-5. Weakness-mining pass over accumulated omp session logs (Mac advisor)
-6. First full loop iteration (one mutation, full gate)
+1. ✓ Oracle sabotage audit
+2. run.sh fixes: run_$k subdirs (no rollout clobbering), composite pass
+   (verify AND rc==0), token extraction; pinned split.json committed
+3. bin/gate.sh (separate script): k=2 aggregation, held-out pass
+   non-regression as hard floor, min-effect-size on duration/tokens,
+   minimal manifest.json; proven by mechanically rejecting mutB on
+   existing runs/ data
+4. Simplicity-veto judge (gpt-oss) — advisory layer after the gate stands
+5. Weakness-mining pass over omp session logs (Mac advisor)
+6. FeatureBench-style excision miner (restores pass headroom — also the
+   fix for the 8/8-pass duration-Goodhart trap)
+7. First full loop iteration (one mutation, full gate)
