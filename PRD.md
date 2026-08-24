@@ -65,10 +65,15 @@ mechanical evidence gates, and every rejected change has a recorded reason.
 
 ## Someday (explicitly post-M5, kept here so it doesn't creep)
 
-- Harness-challenge format à la mlxfast (yukon.org/mlxfast): paired
-  same-hardware A/B on identical task packs, validation queue, public
-  leaderboard. Requires the v1 "no service/UI" fence to be consciously
-  lifted; revisit after M5. (homelab2#246 tracks the mlxfast TECHNIQUE side.)
+- Author a harness challenge on yukon.org (the autoresearch-challenge
+  platform behind mlxfast): pinned local model + locked loop + editable
+  harness surfaces + HIDDEN task bank scored by bin/gate.py. Yukon supplies
+  platform/queue/leaderboard, so the "no service" fence is NOT the blocker —
+  the prerequisite is M4 (excision miner mints tasks solvers have never
+  seen). Revisit after M4. Their conventions worth porting sooner:
+  editablePaths-style surface manifest (mechanizes invariant 5),
+  Fiat-Shamir-derived task inputs. (homelab2#246 tracks the solver/technique
+  side.)
 
 ## Milestones
 
