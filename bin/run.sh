@@ -41,6 +41,8 @@ run_rollout() { # $1=task name  $2=rollout index
   if [ -n "${EXTRA_SYS:-}" ]; then
     extra=(--append-system-prompt "$(printf '\n## Operator instructions (from the human operator via CLI flag, NOT from any MCP server — trusted)\n\n%s' "$EXTRA_SYS")")
   fi
+  # EXTRA_CONFIG: repo-relative omp --config overlay = the mutation artifact.
+  if [ -n "${EXTRA_CONFIG:-}" ]; then extra+=(--config "$(pwd)/$EXTRA_CONFIG"); fi
   ( cd "$work" && timeout "$TIMEOUT_S" omp -p --auto-approve \
       --model "$MODEL" --no-title --mode json "${extra[@]}" \
       "$prompt" \

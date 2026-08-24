@@ -1,0 +1,13 @@
+# MUTATION ctxslim-v1 — surface: omp config overlay (passed via --config).
+# Hypothesis: skills/memories/autolearn instructions dominate the ~165K-token
+# per-rollout input load; disabling them for eval runs cuts tokens_in with no
+# pass regression (eval tasks use core tools only, not skills).
+# Failure pattern targeted: context bloat (baseline-v2 finding #2).
+skills:
+  enabled: false
+memories:
+  enabled: false
+autolearn:
+  enabled: false
+dev:
+  autoqa: false
