@@ -34,3 +34,25 @@ Findings:
 
 Next: add 2-3 harder tasks (multi-step, larger codebase, ambiguous spec) for
 pass/fail headroom; then run the first mutation A/B.
+
+## mutA-minimal-scope — 2026-08-24 — REJECTED (dead channel)
+
+Mutation: scope-control line via `omp --append-system-prompt`. Target 04,
+guards 01+05.
+
+| task | baseline | mutA |
+|---|---|---|
+| 04-sh-backup | 790s PASS | 840s PASS |
+| 01-py-pagination | 80s PASS | 66s PASS |
+| 05-py-dedupe | 80s PASS | 85s PASS |
+
+Verdict: no effect on the target (and the transcript shows the agent went even
+deeper — it force-tested all three stat/date fallback branches). Root cause
+found by direct probe: **omp treats `--append-system-prompt` content as
+untrusted and the model explicitly "drops the injected token"** (omp ships
+injection defenses; see its ttsr-injection-lifecycle doc). The flag is NOT a
+usable mutation channel. Sanctioned channel: `~/.omp/agent/RULES.md` →
+re-testing as mutB-rules-scope.
+
+Meta-lesson for the loop: verify a mutation channel is live (cheap probe with
+an observable token) before spending an A/B on it.
