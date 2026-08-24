@@ -96,14 +96,14 @@ AHE assumes you own all 7 component types (we own ~4 of omp's surfaces).
 
 ## Options
 
-A. **Build forward on harness-eval** (current path): full control, local-first,
+A. **Build forward on harness-ratchet** (current path): full control, local-first,
    our three unshipped pieces stay ours; cost: we re-implement gate machinery
    that auto-harness already has, and maintain it.
 B. **Adopt auto-harness as chassis**, contribute local-model + BYO-harness +
    verifier-audit + task-minting upstream: leverage 535★ momentum; cost: its
    architecture assumes it owns the agent; retrofitting BYO-harness may be a
    rewrite-in-disguise; cloud-agent assumptions run deep.
-C. **Hybrid** (proposed): keep harness-eval as the vehicle; PORT auto-harness's
+C. **Hybrid** (proposed): keep harness-ratchet as the vehicle; PORT auto-harness's
    proven gate patterns and Harneloop's evidence-manifest idea; define a thin
    HARNESS ADAPTER interface so the loop is omp-first but not omp-only:
 

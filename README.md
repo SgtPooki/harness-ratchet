@@ -1,4 +1,17 @@
-# harness-eval
+# harness-ratchet
+
+**A ratchet for local coding agents: harness improvements only move forward.**
+
+harness-ratchet automatically improves the harness (prompts, rules, context,
+config) around a frozen local model — no fine-tuning. It mints eval tasks from
+your own repositories, audits every verifier for gameability, and accepts a
+harness change only when it passes evidence gates: multi-run rollouts, held-out
+non-regression, effect-size thresholds, automatic rollback. Like a mechanical
+ratchet — or a CI coverage ratchet — the loop is built so quality can click
+forward but cannot silently slip back.
+
+Motto: *nothing the optimizer influences may own the scoreboard.*
+
 
 Baseline eval pack for harness-engineering iterations on the omp (oh-my-pi)
 agent harness, per the observability-driven loop in
