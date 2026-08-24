@@ -34,6 +34,23 @@ for task in tasks/*/; do
     fail=1
   fi
   rm -rf "$tmp"
+
+  # Verifier-robustness check: a deliberately WRONG solution must FAIL.
+  # Guards against tautological verifiers (checks one happy path, or passes
+  # anything). Optional per-task sabotage/ dir; REQUIRED for generated tasks.
+  if [ -d "$task/sabotage" ]; then
+    tmp=$(mktemp -d)
+    cp -R "$task/workspace/." "$tmp/"
+    cp -R "$task/solution/." "$tmp/"
+    cp -R "$task/sabotage/." "$tmp/"
+    if run_verify "$task" "$tmp"; then
+      echo "ORACLE FAIL [$name]: sabotaged solution PASSES verifier (verifier is too weak)"
+      fail=1
+    else
+      echo "  sabotage ok [$name]"
+    fi
+    rm -rf "$tmp"
+  fi
 done
 
 exit $fail
