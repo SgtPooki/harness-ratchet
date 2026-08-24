@@ -1,0 +1,7 @@
+{
+  "_comment": "Pinned task split. held_in: mutation agents may see results here; held_out: promotion requires non-regression here, never shown to proposers; sentinel: never optimized against, monitored for drift only. Changing this file invalidates cross-run comparisons — bump split_version and start a new results era.",
+  "split_version": 1,
+  "held_in": ["01-py-pagination", "03-js-slugify", "05-py-dedupe", "06-py-version-sync"],
+  "held_out": ["02-py-config-type", "08-py-report-bleed"],
+  "sentinel": ["04-sh-backup", "07-py-lru-ttl"]
+}
