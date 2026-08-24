@@ -1,5 +1,35 @@
 # Results ledger
 
+## baseline-v2 — 2026-08-24 — THE reference baseline (k=2, composite pass, tokens)
+
+Runner v2: k=2 rollouts, composite pass (verifier AND rc==0), token telemetry
+from omp --mode json. Harness: omp v18.0.4 defaults + thinking-on/temp-0.2
+extraBody. Model: vllm/homelab-default (qwen38-27b-dflash2).
+
+| task | role | pass | durations | tok_out p50 | tok_in p50 |
+|---|---|---|---|---|---|
+| 01-py-pagination | held-in | 2/2 | 46/58s | 1,453 | 165,174 |
+| 02-py-config-type | held-out | 2/2 | 77/99s | 2,415 | 253,738 |
+| 03-js-slugify | held-in | 2/2 | 120/245s | 10,745 | 318,226 |
+| 04-sh-backup | sentinel | **1/2** | 676s / TIMEOUT 900s | 25,183 | 1,211,022 |
+| 05-py-dedupe | held-in | 2/2 | 107/153s | 5,367 | 362,495 |
+| 06-py-version-sync | held-in | 2/2 | 71/93s | 3,544 | 226,676 |
+| 07-py-lru-ttl | sentinel | 2/2 | 142/196s | 9,627 | 234,313 |
+| 08-py-report-bleed | held-out | 2/2 | 251/262s | 18,950 | 320,938 |
+
+**15/16 rollouts pass · 3,496s wall · 154,573 tokens out · 6.19M tokens in.**
+
+Findings:
+1. The composite-pass rule caught its first real failure: 04 r1 timed out at
+   900s with a passing tree — the k=1-era scorer would have called it a pass.
+   The sentinel now documents the over-engineering spiral as a measurable
+   50%-pass, 1.2M-token-in outlier (the simplicity veto's target).
+2. Input-token load is dominated by harness context: even the smallest task
+   costs ~165K tokens in per rollout. Context slimming is a first-class
+   mutation target with a clean metric.
+3. Run-to-run duration variance is real (03: 120s vs 245s) — vindicates k≥2
+   and effect-size thresholds; single-run deltas under ~2x are noise-suspect.
+
 One row per labeled run set. Raw JSONL + transcripts live under `runs/` (gitignored);
 this file is the committed record.
 
