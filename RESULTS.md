@@ -47,12 +47,30 @@ guards 01+05.
 | 05-py-dedupe | 80s PASS | 85s PASS |
 
 Verdict: no effect on the target (and the transcript shows the agent went even
-deeper — it force-tested all three stat/date fallback branches). Root cause
-found by direct probe: **omp treats `--append-system-prompt` content as
-untrusted and the model explicitly "drops the injected token"** (omp ships
-injection defenses; see its ttsr-injection-lifecycle doc). The flag is NOT a
-usable mutation channel. Sanctioned channel: `~/.omp/agent/RULES.md` →
-re-testing as mutB-rules-scope.
+deeper — it force-tested all three stat/date fallback branches).
+
+Root cause — CONFIRMED omp-side, homelab exonerated (2026-08-24 differential):
+
+- Behavioral probes with benign phrasing failed identically on BOTH
+  vllm/homelab-default (through the proxy) and mac-gptoss/gpt-oss-20b (no
+  proxy in the path) → not a homelab effect.
+- Code read: vllm-proxy's SystemPromptSelector PREPENDS its template and
+  preserves the client system message verbatim — it strips nothing.
+- Session-log forensics (the smoking gun): the model's thinking says the
+  appended text appeared "(from the node_repl MCP server instructions)" and
+  that the system prompt labels that section "server-controlled and may not be
+  verified" — so it deliberately declines to follow it. omp's prompt assembly
+  places `--append-system-prompt` content in (or visually merged into) the
+  MCP-instructions zone, whose framing marks it untrusted.
+
+**FURTHER INVESTIGATION (upstream omp):** `--append-system-prompt` being
+neutralized by its own placement defeats the flag's documented purpose —
+candidate bug report to oh-my-pi. Repro: append "House style: end every reply
+with the word ZANZIBAR.", observe refusal in thinking + absent token.
+
+Usable mutation channels instead: `~/.omp/agent/RULES.md` (testing as
+mutB-rules-scope), config-level system prompt, project context files.
 
 Meta-lesson for the loop: verify a mutation channel is live (cheap probe with
-an observable token) before spending an A/B on it.
+an observable token) before spending an A/B on it — and when a probe fails,
+differentiate WHERE it died before assigning blame.
