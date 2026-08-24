@@ -49,10 +49,12 @@ run_rollout() { # $1=task name  $2=rollout index
   extra+=(--config "$(pwd)/mutations/eval-isolation.yml")
   # EXTRA_CONFIG: repo-relative omp --config overlay = the mutation artifact.
   if [ -n "${EXTRA_CONFIG:-}" ]; then extra+=(--config "$(pwd)/$EXTRA_CONFIG"); fi
+  local rdir_abs
+  rdir_abs=$(cd "$rdir" && pwd)
   ( cd "$work" && timeout "$TIMEOUT_S" omp -p --auto-approve \
       --model "$MODEL" --no-title --mode json "${extra[@]}" \
       "$prompt" \
-      >"../stream.jsonl" 2>"../stderr.txt" )
+      >"$rdir_abs/stream.jsonl" 2>"$rdir_abs/stderr.txt" )
   local rc=$? dur=$((SECONDS - t0))
 
   local vout pass
