@@ -1,0 +1,5 @@
+[project]
+name = "payload-tool"
+version = "2.3.1"
+description = "Toy payload tool"
+requires-python = ">=3.10"
