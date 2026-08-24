@@ -11,9 +11,10 @@ Reads runs/<label>/results.jsonl for both labels and split.json, then decides:
     2. held_out pass floor (HARD): candidate pass rate per held_out task >=
        baseline — laziness that breaks correctness dies here;
     3. held_in non-regression on pass (HARD);
-    4. improvement: at least one soft axis (duration_p50, tokens_out_p50)
-       improves by >= --effect (relative) on held_in aggregate, with no soft
-       axis regressing by more than --effect;
+    4. improvement: a held_in pass-rate gain counts, OR at least one soft
+       axis (duration_p50, tokens_out_p50, tokens_in_p50) improves by >=
+       --effect (relative) on held_in aggregate, with no soft axis regressing
+       by more than --effect;
     5. sentinel report is advisory (printed, never gates) — sentinels are
        monitored for drift, not optimized.
 
@@ -49,6 +50,7 @@ def agg(rows):
         "pass_rate": sum(1 for r in rows if r["pass"]) / len(rows),
         "duration_p50": statistics.median(r["duration_s"] for r in rows),
         "tokens_out_p50": statistics.median(r.get("tokens_out", 0) for r in rows),
+        "tokens_in_p50": statistics.median(r.get("tokens_in", 0) for r in rows),
     }
 
 
@@ -94,10 +96,17 @@ def main():
             reasons.append(f"held_in regression: {t} pass "
                            f"{b_in[t]['pass_rate']:.2f}->{c_in[t]['pass_rate']:.2f}")
 
-    # 4. soft-axis improvement with no large soft regression (held_in aggregate)
+    # 4. improvement: a held_in pass-rate GAIN counts (a mutation that fixes a
+    # failing task must be promotable even at unchanged duration/tokens), else
+    # at least one soft axis must improve by the effect threshold.
     improved = []
+    if b_in and c_in:
+        b_pass = sum(v["pass_rate"] for v in b_in.values())
+        c_pass = sum(v["pass_rate"] for v in c_in.values())
+        if c_pass > b_pass:
+            improved.append("pass_rate")
     if b_in and c_in and not any(r.startswith("coverage") for r in reasons):
-        for axis in ("duration_p50", "tokens_out_p50"):
+        for axis in ("duration_p50", "tokens_out_p50", "tokens_in_p50"):
             b_tot = sum(v[axis] for v in b_in.values())
             c_tot = sum(v[axis] for v in c_in.values())
             if b_tot > 0:
@@ -120,7 +129,7 @@ def main():
     rollback = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                               capture_output=True, text=True).stdout.strip()
     manifest = {
-        "gate_version": 1, "split_version": split["split_version"],
+        "gate_version": 2, "split_version": split["split_version"],
         "baseline": args.baseline, "candidate": args.candidate,
         "min_k": args.min_k, "effect_threshold": args.effect,
         "decision": decision, "reasons": reasons, "improved_axes": improved,
