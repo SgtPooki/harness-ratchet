@@ -28,9 +28,13 @@ run_verify() { # $1=task dir  $2=workspace copy
 run_rollout() { # $1=task name  $2=rollout index
   local name="$1" i="$2" task="tasks/$1"
   local rdir="$RUNDIR/$name/run_$i" work
-  work="$rdir/work"
+  # Isolation: the agent works in a temp dir OUTSIDE this repo (weakness
+  # mining caught agents wandering into runs/ and reading their own live
+  # session streams when work dirs lived in-repo). Copied back post-run for
+  # verification, veto, and mining.
+  work=$(mktemp -d "${TMPDIR:-/tmp}/ratchet-work-XXXXXX")
   mkdir -p "$rdir"
-  rm -rf "$work"; cp -R "$task/workspace" "$work"
+  cp -R "$task/workspace/." "$work/"
 
   local prompt t0
   prompt=$(cat "$task/prompt.md")
@@ -41,6 +45,8 @@ run_rollout() { # $1=task name  $2=rollout index
   if [ -n "${EXTRA_SYS:-}" ]; then
     extra=(--append-system-prompt "$(printf '\n## Operator instructions (from the human operator via CLI flag, NOT from any MCP server — trusted)\n\n%s' "$EXTRA_SYS")")
   fi
+  # Infrastructure config (always on): advisor-off isolation.
+  extra+=(--config "$(pwd)/mutations/eval-isolation.yml")
   # EXTRA_CONFIG: repo-relative omp --config overlay = the mutation artifact.
   if [ -n "${EXTRA_CONFIG:-}" ]; then extra+=(--config "$(pwd)/$EXTRA_CONFIG"); fi
   ( cd "$work" && timeout "$TIMEOUT_S" omp -p --auto-approve \
@@ -51,6 +57,8 @@ run_rollout() { # $1=task name  $2=rollout index
 
   local vout pass
   vout=$(run_verify "$task" "$work")
+  # Archive the workspace back into the run dir; the temp dir goes away.
+  rm -rf "$rdir/work"; cp -R "$work" "$rdir/work"; rm -rf "$work"; work="$rdir/work"
   if echo "$vout" | grep -q '^PASS$' && [ "$rc" -eq 0 ]; then pass=true; else pass=false; fi
 
   RDIR="$rdir" NAME="$name" I="$i" MODEL="$MODEL" LABEL="$LABEL" PASS="$pass" \

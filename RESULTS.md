@@ -1,5 +1,33 @@
 # Results ledger
 
+## Weakness-mining pass 1 — 2026-08-24 — two infrastructure defects found
+
+Mechanical stream profiling of the 04 timeouts (both eras), advisor-named:
+
+1. **Workspace-isolation escape**: work dirs lived inside this repo; candidate
+   04 r1 spent 130 turns (128 bash calls, 7.45M tokens in) wandering into
+   `runs/` and reading its own live session stream, hard-looping on our
+   infrastructure. FIXED: run.sh now executes agents in a temp dir outside the
+   repo, archiving the workspace back post-run.
+2. **Advisor interference in eval rollouts**: baseline 04 r2's transcript shows
+   the agent responding to omp-advisor suggestions (incl. torture-test
+   scripts) mid-eval — nondeterministic steering, a rigor amplifier on 04, and
+   a role conflict with the advisor-as-veto-judge. FIXED: eval runs now always
+   apply `mutations/eval-isolation.yml` (advisor.enabled: false) as
+   infrastructure config.
+
+Consequence: pre-fix and post-fix runs are NOT comparable. `baseline-v3`
+(isolation-fixed runner + promoted ctxslim overlay) becomes the comparison
+baseline for all future candidates. The 04 "rigor spiral" narrative is
+partially revised: baseline r1 was genuine thoroughness; the candidate-era
+7.45M-token blowup was the isolation bug, and the advisor amplified scope on
+at least one rollout.
+
+Also this cycle: simplicity-veto judge landed (bin/veto.py, advisory-only) —
+first verdicts correctly discriminated the spiral rollout (OVER_ENGINEERED)
+from clean ones (OK). Gate v1.2 adds the held-out soft-axis regression floor.
+
+
 ## mut-ctxslim-v1 — 2026-08-24 — **PROMOTED** (the first ratchet click)
 
 Mutation: omp config overlay (`mutations/ctxslim-v1.yml`) disabling

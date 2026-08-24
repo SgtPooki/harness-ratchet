@@ -1,0 +1,7 @@
+# INFRASTRUCTURE config (not a mutation; applied to EVERY eval rollout by
+# run.sh). Disables the omp advisor during eval runs: weakness mining found it
+# injecting mid-run suggestions (incl. torture-test scripts) into rollouts —
+# nondeterministic interference, and a role conflict with the same model
+# serving as the simplicity-veto judge.
+advisor:
+  enabled: false
