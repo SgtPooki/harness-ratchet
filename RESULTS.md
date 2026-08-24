@@ -1,5 +1,37 @@
 # Results ledger
 
+## mut-ctxslim-v1 — 2026-08-24 — **PROMOTED** (the first ratchet click)
+
+Mutation: omp config overlay (`mutations/ctxslim-v1.yml`) disabling
+skills/memories/autolearn for eval runs. Pre-flight probe: 34.5% system-prompt
+cut (56,832 → 37,244 bytes). Gate v1.1 verdict vs pinned `baseline-v2`, k=2:
+
+| gated axis (held-in aggregate) | baseline | candidate | delta |
+|---|---|---|---|
+| tokens_in_p50 | 1,072,572 | 803,637 | **−25.1%** (≥15% effect: PROMOTE driver) |
+| duration_p50 | 446.5s | 419.5s | −6.0% (below effect threshold) |
+| tokens_out_p50 | 21,110 | 20,928 | −0.9% |
+| pass floors (held-in + held-out) | — | — | all held (15/16 rollouts pass, same as baseline) |
+
+Manifest: `runs/mut-ctxslim-v1/manifest.json` (committed as evidence).
+Operationally promoted: eval runs now use the overlay by default; the next
+baseline label must be recorded WITH it.
+
+Honest caveats (recorded, not hidden):
+
+1. **Sentinel 04 drift**: its timeout rollout burned **7.45M tokens in** vs
+   baseline's 0.9–1.5M — cheaper turns let the rigor spiral loop more inside
+   the same 900s. The mutation makes the pathology hungrier, not better.
+   Advisory only (sentinels never gate), and the strongest argument yet for
+   the queued simplicity-veto work.
+2. **Held-out 08 token increase** (median 321K → 487K): visible in evidence
+   but NOT gated — gate v1.1's soft-axis regression floors cover held-in
+   only. Gate v1.2 TODO: add a held-out soft-axis regression floor (held-out
+   stays a floor, never an optimization target). The verdict stands per the
+   rules pinned before the run; rules are never changed post-hoc to flip a
+   verdict.
+
+
 ## baseline-v2 — 2026-08-24 — THE reference baseline (k=2, composite pass, tokens)
 
 Runner v2: k=2 rollouts, composite pass (verifier AND rc==0), token telemetry
