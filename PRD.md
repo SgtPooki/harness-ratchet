@@ -63,6 +63,13 @@ mechanical evidence gates, and every rejected change has a recorded reason.
 - NO mutation cycles targeting sentinel tasks; a run that optimizes against a
   sentinel is invalidated.
 
+## Someday (explicitly post-M5, kept here so it doesn't creep)
+
+- Harness-challenge format à la mlxfast (yukon.org/mlxfast): paired
+  same-hardware A/B on identical task packs, validation queue, public
+  leaderboard. Requires the v1 "no service/UI" fence to be consciously
+  lifted; revisit after M5. (homelab2#246 tracks the mlxfast TECHNIQUE side.)
+
 ## Milestones
 
 - M1 (done): oracle-verified pack, runner v2, pinned split, gate; baseline-v2.
