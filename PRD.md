@@ -72,8 +72,11 @@ mechanical evidence gates, and every rejected change has a recorded reason.
   the prerequisite is M4 (excision miner mints tasks solvers have never
   seen). Revisit after M4. Their conventions worth porting sooner:
   editablePaths-style surface manifest (mechanizes invariant 5),
-  Fiat-Shamir-derived task inputs. (homelab2#246 tracks the solver/technique
-  side.)
+  Fiat-Shamir-derived task inputs. The larger product vision (a focused
+  harness-engineering challenge network + leaderboard, Yukon-style mechanics,
+  localmaxxing-style dashboard, everything in GitHub) is captured in the
+  operator's notes vault (projects/harness-engineering-platform.md) — this
+  repo stays the verification kit that would power it.
 
 ## Milestones
 
