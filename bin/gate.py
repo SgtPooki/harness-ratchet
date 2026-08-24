@@ -14,7 +14,8 @@ Reads runs/<label>/results.jsonl for both labels and split.json, then decides:
     4. improvement: a held_in pass-rate gain counts, OR at least one soft
        axis (duration_p50, tokens_out_p50, tokens_in_p50) improves by >=
        --effect (relative) on held_in aggregate, with no soft axis regressing
-       by more than --effect;
+       by more than --effect on held_in OR held_out (held-out is a floor,
+       never a target);
     5. sentinel report is advisory (printed, never gates) — sentinels are
        monitored for drift, not optimized.
 
@@ -120,6 +121,21 @@ def main():
     if not improved and not reasons:
         reasons.append(f"no soft axis improved by >={args.effect:.0%}")
 
+    # 4b. held_out soft-axis regression floor (v1.2, from the ctxslim-v1
+    # promotion gap: held-out 08 tokens rose ~52% ungated). Held-out
+    # improvements never count toward 'improved' — this is a floor, not a
+    # target.
+    if b_out and c_out:
+        for axis in ("duration_p50", "tokens_out_p50", "tokens_in_p50"):
+            b_tot = sum(v[axis] for v in b_out.values())
+            c_tot = sum(v[axis] for v in c_out.values())
+            if b_tot > 0:
+                delta = (b_tot - c_tot) / b_tot
+                evidence.setdefault("held_out_soft_axes", {})[axis] = {
+                    "baseline": b_tot, "candidate": c_tot, "rel_change": round(delta, 4)}
+                if delta <= -args.effect:
+                    reasons.append(f"held_out soft-axis regression: {axis} {b_tot}->{c_tot}")
+
     # 5. sentinel report (advisory only)
     sent = {t: {"baseline": agg(base[t]) if base.get(t) else None,
                 "candidate": agg(cand[t]) if cand.get(t) else None}
@@ -129,7 +145,7 @@ def main():
     rollback = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                               capture_output=True, text=True).stdout.strip()
     manifest = {
-        "gate_version": 2, "split_version": split["split_version"],
+        "gate_version": 3, "split_version": split["split_version"],
         "baseline": args.baseline, "candidate": args.candidate,
         "min_k": args.min_k, "effect_threshold": args.effect,
         "decision": decision, "reasons": reasons, "improved_axes": improved,

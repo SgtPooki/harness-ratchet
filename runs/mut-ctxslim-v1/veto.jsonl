@@ -1,0 +1,4 @@
+{"task": "04-sh-backup", "rollout": 1, "label": "mut-ctxslim-v1", "advisory": {"verdict": "OVER_ENGINEERED", "reason": "The agent created an unnecessary 'data' directory in the work area, adding files/folders not requested by the task."}}
+{"task": "04-sh-backup", "rollout": 2, "label": "mut-ctxslim-v1", "advisory": {"verdict": "OK", "reason": "The patch correctly refactors the script to handle all legal filenames without adding unnecessary files or infrastructure."}}
+{"task": "01-py-pagination", "rollout": 1, "label": "mut-ctxslim-v1", "advisory": {"verdict": "OK", "reason": "The patch correctly fixes the pagination logic without adding unnecessary files or changes."}}
+{"task": "01-py-pagination", "rollout": 2, "label": "mut-ctxslim-v1", "advisory": {"verdict": "OK", "reason": "The patch correctly adjusts pagination logic without adding extraneous files or changes."}}
