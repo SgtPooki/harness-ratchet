@@ -28,8 +28,10 @@ run_task() {
   local prompt t0
   prompt=$(cat "$task/prompt.md")
   t0=$SECONDS
+  local -a extra=()
+  if [ -n "${EXTRA_SYS:-}" ]; then extra=(--append-system-prompt "$EXTRA_SYS"); fi
   ( cd "$work" && timeout "$TIMEOUT_S" omp -p --auto-approve \
-      --model "$MODEL" --no-title \
+      --model "$MODEL" --no-title "${extra[@]}" \
       "$prompt" \
       >"../transcript.txt" 2>&1 )
   local rc=$? dur=$((SECONDS - t0))
