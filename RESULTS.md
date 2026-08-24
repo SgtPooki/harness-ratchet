@@ -1,5 +1,42 @@
 # Results ledger
 
+## Validity review of the one-day arc — 2026-08-24 — HEADLINE DOWNGRADED pending attribution
+
+Triple adversarial review (codex PARTIALLY SUPPORTED / cursor PARTIALLY
+SUPPORTED / gemini NOT SUPPORTED) of the v2→v4 claim. Consensus:
+
+- The raw v4 run IS better than the raw v2 run; the tokens_in reduction has
+  moderate-strong support (uniform across tasks, aligned with the gated
+  ctxslim result).
+- The CAUSAL headline ("−65% wall, +1 task from one day of ratcheting") is
+  NOT yet supported: three ungated infrastructure changes (isolation,
+  advisor-off, telemetry fix) are bundled into the comparison, v2 and v4 ran
+  in different eras (midday vs evening, different server state), and 04's
+  2/2 at k=2 is within its ~50% historical base rate ("first perfect sweep"
+  may be luck).
+- Methodology debts: manifests lack environment metadata (ts field now
+  added), sequential-not-interleaved sweeps, sentinel 04 both outside the
+  gate and central to the headline.
+
+Until the attribution experiment reports, the claimable results are: the
+gated ctxslim PROMOTE (−25.1% held-in tokens_in, paired conditions) and the
+raw before/after observation (explicitly non-causal).
+
+**Attribution experiment IN FLIGHT** (bin/exp-interleave.sh): per-task
+interleaved 3 arms × k=2 — exp-v4 (current config), exp-noslim (v4 infra,
+no overlay → isolates ctxslim), exp-v2replay (v2-era runner from git,
+advisor on, in-repo workspaces → tests whether v2's numbers reproduce
+today). Verdict criteria: if v2replay ≈ v4, the arc was environment drift;
+if v2replay ≈ old v2 and noslim ≈ v4, infra changes dominate and ctxslim's
+arc contribution is small; if noslim sits between v2replay and v4, both
+contribute.
+
+Also this cycle: task 09-proxy-concurrency-cap MINTED from production
+vllm-proxy middleware (dispatch excised, existing pytest suite as hidden
+oracle, auto-generated sabotage mutant) — oracle green all three directions,
+REAP-stable 3/3. M4 pattern proven; not yet in the split.
+
+
 ## baseline-v4 — 2026-08-24 — **16/16, the new floor** (one day's arc complete)
 
 Isolation-fixed runner (temp-dir workspaces, advisor-off eval config, absolute
