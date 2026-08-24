@@ -1,5 +1,41 @@
 # Results ledger
 
+## baseline-v4 — 2026-08-24 — **16/16, the new floor** (one day's arc complete)
+
+Isolation-fixed runner (temp-dir workspaces, advisor-off eval config, absolute
+telemetry paths) + promoted ctxslim overlay. This label is the comparison
+baseline for all future candidates.
+
+| task | pass | durations | tok_in p50 |
+|---|---|---|---|
+| 01-py-pagination | 2/2 | 13/17s | 100,487 |
+| 02-py-config-type | 2/2 | 18/21s | 160,023 |
+| 03-js-slugify | 2/2 | 57/67s | 190,132 |
+| 04-sh-backup (sentinel) | **2/2 — first ever** | 167/422s | 777,127 |
+| 05-py-dedupe | 2/2 | 21/26s | 180,697 |
+| 06-py-version-sync | 2/2 | 18/25s | 159,005 |
+| 07-py-lru-ttl (sentinel) | 2/2 | 98/106s | 287,204 |
+| 08-py-report-bleed | 2/2 | 47/88s | 173,772 |
+
+**The one-day arc (identical tasks, identical model, harness-only changes):**
+
+| | pass | wall | tokens_in |
+|---|---|---|---|
+| baseline-v2 (omp defaults) | 15/16 | 3,496s | 6.19M |
+| baseline-v3 (isolation+advisor-off) | 15/16 | 1,842s | (telemetry lost — path bug, superseded) |
+| **baseline-v4** | **16/16** | **1,211s** | **4.06M** |
+
+Net: **+1 task recovered, −65% wall time, −34% input tokens**, frozen model
+throughout. Sources of the win: promoted ctxslim mutation (gated, −25%
+held-in tokens), workspace isolation (no repo to scan or wander into),
+advisor-off eval runs (no mid-run steering), each found by the loop's own
+telemetry, canary, or mining.
+
+Caveat kept honest: v3's telemetry loss was a self-inflicted runner bug
+(streams redirected to /tmp), caught the same evening by the zero-token
+anomaly. Durations across v3/v4 replicate, so the speed numbers stand.
+
+
 ## Weakness-mining pass 1 — 2026-08-24 — two infrastructure defects found
 
 Mechanical stream profiling of the 04 timeouts (both eras), advisor-named:
