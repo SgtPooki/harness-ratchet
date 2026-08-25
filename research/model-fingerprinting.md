@@ -76,10 +76,24 @@ Multiple aliases can point at the same weights, and the same alias can point
 at different weights across restarts. The served name therefore must never be
 the fingerprint; it belongs in the runtime envelope as a label at most.
 
-vLLM does understand HF revisions: `--revision` (renamed `--weights-revision`,
-[vllm PR #5453](https://github.com/vllm-project/vllm/pull/5453)) plus separate
-`--code-revision` and `--tokenizer-revision` accept a branch, tag, or commit
-id. vLLM loads weights from an HF repo id (resolved through the standard HF
+vLLM does understand HF revisions: current stable vLLM documents `--revision`
+plus separate `--code-revision` and `--tokenizer-revision`, each accepting a
+branch, tag, or commit id
+([vllm serve CLI reference](https://docs.vllm.ai/en/stable/cli/serve/)). A
+proposal to rename `--revision` to `--weights-revision`
+([vllm PR #5453](https://github.com/vllm-project/vllm/pull/5453)) was closed
+without merging, so `--revision` remains the flag. Two cautions. First, these
+flags accept mutable refs, so only a full commit hash pins anything. Second,
+even a pinned commit did not fully pin behavior before vLLM v0.22.0: advisory
+[GHSA-3ww4-5jv9-j5gm](https://github.com/vllm-project/vllm/security/advisories/GHSA-3ww4-5jv9-j5gm)
+(CVE-2026-47155) documents that revision pinning was not applied to all
+artifact load paths (dynamic code, GGUF files, processors, sibling subfolder
+weights could resolve from an unpinned revision), fixed in v0.22.0. Revision
+flags therefore must not be treated as fully identifying loaded behavior
+across vLLM versions, which is one more reason the fingerprint below is
+computed from bytes on disk rather than from engine configuration.
+
+vLLM loads weights from an HF repo id (resolved through the standard HF
 cache) or a local directory. Identity of what vLLM is actually serving is
 therefore the identity of that directory's files, which reduces to the HF
 cache case or the local-directory case below.
@@ -92,12 +106,13 @@ digest, and blobs on disk are stored under their digest
 ([ollama registry manifest example](https://registry.ollama.ai/v2/library/llama3.2/manifests/1b),
 [storage writeup](https://medium.com/@enisbaskapan/how-ollama-stores-models-11fc47f48955)).
 The weights layer (media type `...image.model`) is a GGUF file, and its digest
-is the sha256 of that GGUF. So for ollama-managed models the exact-weights
-hash can be read straight out of the local manifest, and it agrees by
-construction with "sha256 of the GGUF file": the same weights fingerprint
-whether the user runs the file through llama.cpp directly or through ollama.
-The model tag (`llama3.2:1b`) is mutable and, like vLLM's served name, only a
-label.
+is the sha256 of that GGUF. So for ollama-managed models the per-file sha256
+can be read straight out of the local manifest, and it is the same value one
+gets by hashing the GGUF file directly with llama.cpp in mind. Note that this
+is a bare file hash, not the manifest-level fingerprint defined below; the
+recommendation keeps both, with explicit rules so the derived fingerprint is
+identical regardless of which stack served the file. The model tag
+(`llama3.2:1b`) is mutable and, like vLLM's served name, only a label.
 
 ### Existing conventions for model identity hashing
 
@@ -109,9 +124,12 @@ sigstore's model-transparency project
 signs a detached manifest listing every file in the model directory by sha256,
 so weights, config, and tokenizer verify as a unit. That validates the shape
 of the recommendation below: model identity is a digest over a canonical
-per-file hash manifest, not a single-file hash and not a name. OMS adds
-signatures and transparency logs on top; we only need the manifest digest, and
-adopting the same per-file sha256 basis keeps a future bridge to OMS open.
+per-file hash manifest, not a single-file hash and not a name. The alignment
+is at the per-file sha256 basis only: our manifest text, file selection, and
+digest construction differ from an OMS bundle, so our fingerprint will not
+numerically equal any OMS hash. A future bridge to OMS is possible but needs
+an explicit conversion step (recompute the OMS manifest from the same files),
+not a hash comparison.
 
 Other conventions map onto the same split between exact identity and naming:
 HF model card revisions pin metadata to commits (attribution, not content
@@ -126,41 +144,83 @@ A fingerprint is two components, computed independently.
 ### Component 1: exact-weights digest
 
 `weights: sha256:<hex>` where the hex is the sha256 of a canonical manifest
-text:
+text, computed under a versioned algorithm id (`hr-mf-1` for the definition
+below). The algorithm id is recorded in the schema so a later revision of the
+file-selection or canonicalization rules never silently collides with v1
+digests.
 
 1. Collect the behavior-determining files of the model directory: weight files
    (`*.safetensors`, `*.gguf`, `*.bin`, `*.pt`), weight indexes
-   (`*.safetensors.index.json`), `config.json`, `generation_config.json`, and
+   (`*.safetensors.index.json`), `config.json`, `generation_config.json`,
    tokenizer files (`tokenizer.json`, `tokenizer_config.json`,
-   `tokenizer.model`, `vocab.*`, `merges.txt`, `special_tokens_map.json`).
-   Exclude documentation and images.
+   `tokenizer.model`, `vocab.*`, `merges.txt`, `special_tokens_map.json`),
+   and chat template or processor configs when present
+   (`chat_template.jinja`, `chat_template.json`, `preprocessor_config.json`,
+   `processor_config.json`). Exclude documentation and images.
 2. For each file obtain its sha256.
-3. Canonical manifest: one line per file, `sha256:<hex>  <relative-path>`,
-   sorted bytewise by path, newline separated. The digest of that text is the
-   fingerprint.
+3. Canonical paths: relative to the model root, forward slashes, no leading
+   `./`. A single-file model (one GGUF and nothing else) uses the fixed
+   canonical path `model.gguf` regardless of the file's on-disk name, so that
+   byte-identical GGUF files always yield the same digest whether they came
+   from ollama's blob store, an HF download, or a renamed local copy.
+4. Canonical manifest: one line per file, `sha256:<hex>  <canonical-path>`,
+   sorted bytewise by path, newline separated, trailing newline. The sha256
+   of that text is the fingerprint.
 
-For a single-file GGUF the manifest has one line, so the definition still
-applies uniformly, but implementations may report the bare file sha256
-alongside it since that is what ollama digests and community checksum lists
-use.
+For a single-file GGUF the manifest has one line and the fingerprint is a
+deterministic function of the bare file sha256. Implementations should report
+the bare file hash alongside it (`provenance.file_sha256`), since that is the
+value ollama digests and community checksum lists publish; the manifest digest
+is the identity, the bare hash is the cross-check.
+
+Scope for v1: standard full-weight model layouts only. Repos that ship custom
+model code (`trust_remote_code`, `modeling_*.py` and friends) execute code
+outside this file set, so v1 does not claim to capture their behavior in the
+fingerprint; the code revision belongs in the runtime envelope, and the
+GHSA-3ww4-5jv9-j5gm advisory above shows why conflating the two is dangerous.
+Runtime-applied LoRA or other adapters are likewise runtime envelope entries
+(base fingerprint plus declared adapters), while an adapter merged into the
+weights is simply a new set of weight files and fingerprints normally.
 
 Cheap computation, in order of preference:
 
 - HF cache: read blob symlink targets for sha256 of every LFS file and the
   snapshot directory name for the commit; hash only the small non-LFS files.
-  Effectively free.
+  Effectively free. Two fallbacks are required before trusting this path:
+  the `trees/<commit>.json` listing exists only when a sufficiently recent
+  `snapshot_download()` populated it, and per-file `hf_hub_download()` calls
+  can leave a snapshot with missing shards. The CLI must therefore verify the
+  snapshot is complete against the commit's file listing (local tree cache or
+  one Hub call) before emitting a manifest digest, and fall back to direct
+  hashing (or refuse with a clear error when offline) if completeness cannot
+  be established. A digest over a partial file set is worse than no digest.
 - ollama: read the local manifest's layer digests. Free.
 - Anything else (local directory, modified or merged weights, no-symlink
-  cache): stream-hash the files once and cache the result keyed by absolute
-  path, size, and mtime. Tens of seconds for tens of gigabytes, paid once per
-  model, which is negligible next to a benchmark run.
+  cache): stream-hash the files once and persist the result in a local cache
+  keyed by content evidence, not timestamps: absolute path, file size, and a
+  partial hash (for example sha256 of the first and last mebibyte). mtime is
+  not part of the key; it is trivially preserved by copy tools and editable,
+  so it can validate a stale entry. Cost honesty: tens of gigabytes hash in
+  tens of seconds on NVMe, but frontier-scale checkpoints run to hundreds of
+  gigabytes and take minutes even on fast storage, so implementations should
+  stream with a progress indicator and never discard the persisted cache
+  between runs. Still a one-time cost per model, negligible next to a
+  benchmark run.
 
 ### Component 2: family bucket
 
-`family: <string>`, a normalized lowercase `basename-sizelabel` tag, for
-example `qwen3-27b` or `llama3.2-1b`. It answers "what does the dashboard
-group by" and deliberately ignores quantization, fine-tunes, and merges of the
-same base at the same size.
+`family: <string>`, a normalized lowercase `basename-sizelabel[-tune]` tag,
+for example `qwen3-27b-instruct`, `qwen3-27b` (the base model), or
+`llama3.2-1b-instruct`. It answers "what does the dashboard group by" and
+deliberately ignores quantization and repackaging, but it does encode
+instruction-tune status: a base model and its instruct tune behave differently
+enough on agentic tasks that grouping them would mislead readers. Third-party
+fine-tunes and merges derived from a family keep that family string but are
+distinguishable in the schema: `provenance` identifies the actual weights, and
+`family_source` records whether the family was inferred from metadata or
+declared by the operator. Readers should treat the family as "derived from
+this base lineage at this size and tune level", never as "equivalent to the
+base publisher's model".
 
 Derivation, best source first:
 
@@ -181,12 +241,15 @@ known:
 
 ```yaml
 model_fingerprint:
+  algorithm: hr-mf-1               # fingerprint algorithm version
   weights: sha256:9f2a...          # canonical manifest digest, exact identity
-  family: qwen3-27b                # dashboard grouping bucket
+  family: qwen3-27b-instruct       # dashboard grouping bucket
+  family_source: inferred          # inferred | operator
   provenance:                      # optional, attribution only
     source: hf                     # hf | ollama | local
     repo: org/model-name           # when source is hf or ollama
     revision: 607a30d783df...      # full commit hash (hf) or manifest digest (ollama)
+    file_sha256: sha256:1c4e...    # bare file hash, single-file models only
     quant: q4-k-m                  # baked-in quant scheme, or none
 ```
 
@@ -217,6 +280,19 @@ which change behavior without changing the fingerprint.
 - Family stays operator-confirmed as above. A merge of two families is a new
   family string chosen by the operator.
 
+### API-only and otherwise unhashable weights
+
+Some claims will target models whose bytes the operator cannot read: hosted
+API endpoints, or engines that hide the weights behind an opaque store. The
+policy is explicit rather than best-effort: the fingerprint's `weights` field
+is recorded as `unavailable` (no digest is fabricated from names or API
+metadata), the family and provenance are still recorded as declared labels,
+and the claim is restricted to the local-transfer credibility lane. Without an
+exact-weights digest there is nothing for an exact replication to match and
+nothing for a registry re-run to load, so such claims are ineligible for both
+of those lanes (VISION.md "Trust model") and the registry can derive that
+ineligibility mechanically from the fingerprint alone.
+
 ### What not to do
 
 - Do not use vLLM served names, ollama tags, or HF branch names as any part of
@@ -226,7 +302,8 @@ which change behavior without changing the fingerprint.
 - Do not hash tensor contents individually (parsing safetensors or GGUF
   internals) for v1. File-level sha256 is what every surveyed ecosystem
   already exposes or expects (LFS OIDs, ollama digests, OMS manifests), and
-  it makes independently computed fingerprints agree with published hashes.
+  it lets the per-file hashes in our manifest be cross-checked against
+  published values even though the manifest digest itself is ours alone.
   Tensor-level hashing that survives resharding could be a later extension,
   flagged by a fingerprint algorithm version field.
 
@@ -237,6 +314,7 @@ which change behavior without changing the fingerprint.
 - https://github.com/ggml-org/ggml/blob/master/docs/gguf.md
 - https://docs.vllm.ai/en/stable/cli/serve/
 - https://github.com/vllm-project/vllm/pull/5453
+- https://github.com/vllm-project/vllm/security/advisories/GHSA-3ww4-5jv9-j5gm
 - https://registry.ollama.ai/v2/library/llama3.2/manifests/1b
 - https://github.com/ossf/model-signing-spec
 - https://github.com/sigstore/model-transparency
