@@ -24,7 +24,10 @@ agent finds ciphertext), not a competitive trust boundary.
   `go install`. Source: https://github.com/FiloSottile/age
 - Multi-recipient is native: repeat `-r` per recipient, or `-R` with a
   recipients file (one public key per line). The format wraps the file key
-  once per recipient, so any listed identity decrypts independently.
+  once per recipient, so any listed identity decrypts independently. Each
+  recipient adds one stanza to the file header, so the header grows
+  linearly with recipient count; negligible at two recipients, worth
+  knowing if a pack ever fans out to many scorer keys.
 - Keygen is one command with no ceremony: `age-keygen -o key.txt` prints
   the public key and writes the identity file. Keys are short strings
   (`age1...` public, `AGE-SECRET-KEY-...` private), storable as plain
@@ -32,8 +35,14 @@ agent finds ciphertext), not a competitive trust boundary.
 - Scriptable by design: `-e`/`-d`, stdin/stdout, `-i` identity files,
   exit codes. SSH keys also work as recipients/identities, which lets an
   operator reuse existing `~/.ssh` keys.
-- Post-quantum hybrid keys exist behind `age-keygen -pq` for operators who
-  want them; not needed for this threat model.
+- Post-quantum hybrid keys exist behind `age-keygen -pq` in recent
+  releases (v1.3.0 or later); they produce much longer recipient strings
+  (roughly 2000 characters) and are not needed for this threat model.
+- age provides confidentiality, not signing. Its AEAD construction makes
+  ciphertext tampering fail decryption, but nothing binds a ciphertext to
+  an author identity; authenticity comes from the pack digest and
+  whatever signs the manifest, and designers must not assume age alone
+  provides it.
 
 ### rage (str4d/rage)
 
@@ -41,9 +50,10 @@ agent finds ciphertext), not a competitive trust boundary.
   interoperable with the Go tool. Prebuilt binaries for macOS and Linux,
   `brew install rage`, `cargo install rage`, and distro packages.
   Source: https://github.com/str4d/rage
-- Matters here mainly as ecosystem insurance: two maintained
-  implementations of one open spec (https://age-encryption.org/v1), plus
-  it is the engine behind the Python bindings below.
+- Matters here mainly as ecosystem insurance: a maintained second
+  implementation of one open spec (https://age-encryption.org/v1) makes
+  the format much less likely to die with any single tool, and rage is
+  the engine behind the Python bindings below.
 
 ### OpenSSL hybrid (openssl cms / smime)
 
@@ -93,10 +103,11 @@ agent finds ciphertext), not a competitive trust boundary.
   with a key so crawlers cannot ingest it, exactly the contamination
   posture VISION.md takes for oracle surfaces.
   https://aclanthology.org/2023.emnlp-main.308/
-- BIG-bench pairs a canary GUID with the option of encrypting test files:
-  https://github.com/google/BIG-bench (canary and data-encryption guidance
-  in the contribution docs). Canary strings are complementary to, not a
-  substitute for, encryption.
+- BIG-bench requires a canary GUID in public evaluation files so trainers
+  can filter them from crawls and researchers can probe for
+  contamination: https://github.com/google/BIG-bench. Canary strings are
+  complementary to, not a substitute for, encryption; BIG-bench itself
+  does not document an encrypted-test-files workflow.
 - Secrets-in-git ecosystem: SOPS supports age natively as a key backend
   (https://github.com/getsops/sops#encrypting-using-age), and age is the
   common choice for committing encrypted files to public repos. No
@@ -106,24 +117,111 @@ agent finds ciphertext), not a competitive trust boundary.
 
 ## Recommendation
 
-Use age. It is the only candidate that hits all five criteria without
-caveats: single static binary on both platforms, native multi-recipient
-encryption with bare short keys, pipeline-friendly CLI, one-command
-keygen with file-based key storage, and direct prior art in the
-hidden-test-set literature (encrypt-what-you-publish). rage guarantees
-the format outlives any one implementation, and pyrage gives an
-in-process Python path if the kernel ever wants one. GPG and OpenSSL both
-solve the problem but each drags in machinery (keyrings and trust
-prompts; X.509 and cipher-flag correctness) that a solo operator would
-maintain forever for zero added benefit at this trust boundary.
+Use age. It is the candidate that best fits all five criteria: single
+static binary on both platforms, native multi-recipient encryption with
+bare short keys, pipeline-friendly CLI, one-command keygen with
+file-based key storage, and direct prior art in the hidden-test-set
+literature (encrypt-what-you-publish). The known tradeoffs are minor at
+this scale: header size grows linearly with recipient count, and
+post-quantum recipients are long strings gated on a recent age release.
+rage keeps the format credible as a spec with a maintained second
+implementation, and pyrage gives an in-process Python path if the kernel
+ever wants one. GPG and OpenSSL both solve the problem but each drags in
+machinery (keyrings and trust prompts; X.509 and cipher-flag
+correctness) that a solo operator would maintain forever for zero added
+benefit at this trust boundary.
 
 Concretely per pack: encrypt each protected surface to two recipients,
 `age -r <scorer-pubkey> -r <author-pubkey> -o verifier.py.age verifier.py`.
-The manifest's encryption field records the scheme (`age-v1`) and the
-recipient role labels, never the keys. The operator keeps one identity
-file per role (for example `~/.config/harness-ratchet/scorer.key`,
-generated by `age-keygen`), and the scorer public key ships with the pack
-tooling so authors can encrypt to it.
+The operator keeps one identity file per role (for example
+`~/.config/harness-ratchet/scorer.key`, generated by `age-keygen`), and
+the scorer public key ships with the pack tooling so authors can encrypt
+to it.
+
+### Recipient architecture: shared scorer key vs per-node keys
+
+Two shapes are possible and the choice should be explicit in the pack
+format docs:
+
+- One shared scorer key, held by every scoring node. Simplest to operate
+  and the default for a solo operator. The risk trade is that one
+  compromised node leaks the verifiers of every pack encrypted to that
+  key.
+- N distinct scorer keys, one per node or per consumer. Compromise is
+  contained to one key's packs, but every pack must be encrypted to all
+  N recipients up front, and the recipient set is baked in at encryption
+  time.
+
+In both shapes, age has no partial re-keying: adding or removing a
+recipient later means decrypting and re-encrypting the file, because the
+recipient stanzas are fixed in the header when the file is written. For
+the current scale (one operator, one scorer role, one author role) the
+shared-key shape is right; the manifest schema below keeps enough key
+identity metadata that a later move to per-node keys is a data change,
+not a format change.
+
+### Key rotation and revocation
+
+age has no revocation infrastructure, so revocation is a pack-management
+policy, not a protocol feature. If a scorer key is compromised, the
+ciphertext already published to it must be treated as readable by the
+attacker forever; rotation protects future packs only. The policy:
+
+- Rotation is signaled by publishing a new scorer public key with a new
+  key version in the pack tooling, and recording the compromised
+  version as revoked in the era registry alongside the split and
+  baseline records it already versions.
+- New and re-published packs encrypt to the new key. During a grace
+  period, packs may be encrypted to both old and new scorer keys
+  (age multi-recipient makes dual-recipient transition free) so scoring
+  nodes can upgrade without a flag day; the grace period ends by
+  dropping the old recipient on the next pack re-publication.
+- Because encryption here is process hygiene rather than a competitive
+  trust boundary, a leaked scorer key does not invalidate past scores;
+  it re-exposes verifier text that a human runner could already read.
+  The registry note exists so consumers know which vintages were
+  published under a since-revoked key.
+
+## Manifest encryption-field schema sketch
+
+Per surface, the manifest records the scheme and the recipient
+identities, never private keys. Public keys are short enough to embed
+verbatim; the fingerprint is a hash of the recipient string so tooling
+can match keys without shipping them:
+
+```json
+{
+  "surfaces": {
+    "agent": { "encryption": "plaintext" },
+    "verifier": {
+      "encryption": "age-v1",
+      "file": "verifier.py.age",
+      "recipients": [
+        { "role": "scorer", "key_version": 2,
+          "public_key": "age1...", "fingerprint": "sha256:..." },
+        { "role": "author", "key_version": 1,
+          "public_key": "age1...", "fingerprint": "sha256:..." }
+      ]
+    }
+  }
+}
+```
+
+Conventions:
+
+- Encrypted files are binary age output, not ASCII-armored (`-a`); packs
+  are distributed as archives, so armor buys nothing and inflates size.
+- `verifier.py.age` replaces `verifier.py` in the published pack; the
+  plaintext file never ships. The `file` field names the ciphertext so
+  runners do not guess by extension.
+- The pack digest covers the pack exactly as published, so for an
+  encrypted surface it covers the ciphertext bytes. age output is
+  randomized (a fresh file key per encryption), so re-encrypting the
+  same plaintext yields a new digest; a re-publication is therefore a
+  new pack version by construction, which is consistent with how the
+  claim schema already pins pack digest and vintage.
+- `plaintext` remains the zero-cost default; a plaintext surface has no
+  `recipients` and its `file` is the plaintext name.
 
 ## Runner-integration sketch
 
@@ -132,7 +230,7 @@ only after the agent process has exited.
 
 1. Pack layout: `task/verifier.py.age` (and `reference/`, `sabotage/`
    equivalents) alongside the plaintext agent surface. The manifest marks
-   each surface `plaintext` or `age-v1` with recipient roles.
+   each surface `plaintext` or `age-v1` as above.
 2. Agent phase: the runner materializes only the agent surface into the
    agent workspace. Ciphertext files are not copied in; even if the agent
    escapes its workspace and reads the pack, it finds `.age` ciphertext.
