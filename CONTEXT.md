@@ -27,6 +27,18 @@ If a change needs a term to mean something else, change this file first.
   oracle.sh audits it only where present.
 - **rollout** — one agent attempt at one task (`run_$k`). **k** — rollouts
   per task; gate minimum is 2.
+- **pack** — a distributable directory of tasks plus a `pack.json` manifest;
+  identified by its **pack digest** (hr-pd-1) and its **vintage** (monotonic
+  integer + publication date; any content change is a new vintage). Packs
+  never dictate split roles.
+- **task surface** — one of a task's three audiences: agent surface (prompt,
+  workspace), scoring surface (verifier), admission surface (solution,
+  sabotage). Distinct from **surface** above, which is a mutable part of the
+  HARNESS. Each task surface carries an encryption field (plaintext or
+  role-keyed).
+- **admission record** — per-task `admission.json`: the miner's audit
+  attestation (oracle triple, mutant kills, stability). Never authoritative;
+  consumers re-execute the audit.
 - **split** — the pinned assignment in `split.json`: **held-in** (visible to
   proposers), **held-out** (non-regression floor, never shown to proposers),
   **sentinel** (never optimized against; drift canary only).
