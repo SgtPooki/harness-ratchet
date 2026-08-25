@@ -1,3 +1,5 @@
+> **Superseded note (2026-08-25):** the hardcode-omp, no-adapter guidance below predates the kernel/runner interface locked in issue #2; the runner interface with omp as sole reference adapter governs. Kept for the build-vs-adopt survey.
+
 # Decision: build our loop vs. adopt an existing OSS chassis
 
 Status: DECIDED 2026-08-24 — **Build forward (A′ / "Ruthless A")**. Triple
