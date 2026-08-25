@@ -1,6 +1,6 @@
 # VISION: where harness-ratchet is going
 
-Status: draft, candidate for ratification, 2026-08. This document names the
+Status: ratified 2026-08-25. This document names the
 destination and the constraints every design decision must respect. PRD.md
 owns current scope; when the two disagree, PRD.md governs today's work and
 this file governs where it must remain able to go. Where PRD.md sketches a
