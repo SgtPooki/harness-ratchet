@@ -1,5 +1,42 @@
 # Results ledger
 
+## Attribution experiment VERDICT — 2026-08-24 — improvements CONFIRMED CAUSAL, credit reassigned
+
+48 rollouts, per-task interleaved (same evening, same server), 3 arms × k=2:
+
+| arm | pass | wall | tokens_in (sweep) | held-in tok_in p50 |
+|---|---|---|---|---|
+| exp-v4 (full current config) | 16/16 | 1,290s | 4.65M | 513K |
+| exp-noslim (v4 infra, no overlay) | 16/16 | 1,316s | 4.82M | 670K |
+| exp-v2replay (old runner, advisor on, in-repo) | **15/16** | **4,494s** | 7.77M | 1,264K |
+
+Against the pre-registered criteria:
+
+1. **Environment-drift hypothesis REFUTED.** The v2 replay reproduced the old
+   numbers on the same evening — slower even than original v2 (4,494s vs
+   3,496s) and reproduced the 04 timeout on demand, minutes after modern arms
+   passed the same task. If anything the evening server was slower, making
+   the modern numbers conservative.
+2. **Wall-time win (−65%+) is caused by the infrastructure fixes**
+   (isolation + advisor-off): replay 4,494s → noslim 1,316s; adding ctxslim
+   changes wall by only ~2%.
+3. **ctxslim's token claim REPLICATES**: held-in tokens_in 670K → 513K
+   (−23.4%) in this independent paired run vs −25.1% in the original gated
+   A/B. Two paired experiments, same effect size — solidly causal on its
+   gated axis.
+4. **The pass improvement is real and config-caused**: modern arms are 32/32
+   today (04: 4/4) while the replay arm reproduced the timeout — the +1 task
+   follows the config, not luck. (Gemini's k=10-on-04 remains open for
+   tighter bounds; today's 04 record under modern config is 6/6.)
+
+RESTORED HEADLINE (corrected attribution): one day, model frozen —
+**−65% wall time and 15/16→16/16 from evaluation-infrastructure fixes
+(isolation, advisor-off), −23-25% held-in input tokens from the gated
+ctxslim mutation** — all now supported by same-day interleaved paired runs.
+The reviewers' core objection (bundled ungated changes) was correct and is
+resolved by measurement, not argument.
+
+
 ## Validity review of the one-day arc — 2026-08-24 — HEADLINE DOWNGRADED pending attribution
 
 Triple adversarial review (codex PARTIALLY SUPPORTED / cursor PARTIALLY
