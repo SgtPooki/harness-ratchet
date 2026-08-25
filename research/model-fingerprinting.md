@@ -114,6 +114,55 @@ recommendation keeps both, with explicit rules so the derived fingerprint is
 identical regardless of which stack served the file. The model tag
 (`llama3.2:1b`) is mutable and, like vLLM's served name, only a label.
 
+### Prior art: localmaxxing
+
+[localmaxxing](https://www.localmaxxing.com/en) is the closest live system to
+the registry dashboard: a public leaderboard of local inference results with
+community submissions via a web form or the `lmx` CLI. Its identity scheme is
+worth examining precisely because it is name-based end to end.
+
+A leaderboard row is keyed by self-reported strings: a Hugging Face repo id,
+a quantization label, the engine and its version, and the hardware. The
+[models listing](https://www.localmaxxing.com/en/models) shows quantization
+variants as separate entries (a base repo and its GPTQ-Int4 repackage are
+distinct rows) with no cryptographic identity, revision display, or verified
+badge anywhere. Grouping is by identical strings; rankings take the median
+per group, require at least three runs, and exclude runs whose parameter
+counts or quantization labels cannot be parsed
+([get started](https://www.localmaxxing.com/en/get-started),
+[leaderboard](https://www.localmaxxing.com/en/leaderboard)).
+
+The `lmx` CLI's benchmark run payload confirms the trust boundary. It carries
+an `hfId` (a repo id string, resolved from the engine's served-model alias by
+a name search, with the resolution explicitly marked `status: alias`), a
+`modelRevision` that in practice holds the mutable ref `main` rather than a
+commit hash, a parsed `quantization` string whose resolution records its
+source as the CLI itself, and engine name and version. Measurement provenance
+is handled carefully (separate fields record where timing, TTFT, and token
+counts came from), but nothing binds any of it to weight bytes: no file hash,
+no commit pin, no manifest.
+
+Three lessons for hr-mf-1:
+
+- Validation of the premise. The closest live leaderboard demonstrates the
+  default outcome when identity is not designed: rows keyed by self-reported
+  names, a revision field that pins nothing, and no way to tell whether two
+  submissions ran the same bytes. This is exactly the gap the exact-weights
+  digest closes, and it confirms that served-name resolution (which lmx also
+  does) is a labeling convenience, not identity.
+- Quantization labels need a normalized vocabulary. localmaxxing must
+  exclude runs with unparseable quantization labels to keep groups coherent,
+  and the same model can surface twice when the quant lives in the repo name
+  (GGUF-style) versus a metadata field (safetensors-style). hr-mf-1 avoids
+  the identity half of this by content-addressing, but `provenance.quant`
+  should still be drawn from a normalized enum so human-facing grouping does
+  not fragment the way string-keyed rows do.
+- Family grouping will be demanded by users. localmaxxing's per-repo rows
+  fragment results across repackagings of the same base model, which is the
+  reader problem the family bucket exists to solve; keeping family separate
+  from exact identity, rather than choosing one as localmaxxing implicitly
+  does, remains the right split.
+
 ### Existing conventions for model identity hashing
 
 The closest thing to a standard is the OpenSSF Model Signing spec (OMS) and
@@ -318,4 +367,5 @@ ineligibility mechanically from the fingerprint alone.
 - https://registry.ollama.ai/v2/library/llama3.2/manifests/1b
 - https://github.com/ossf/model-signing-spec
 - https://github.com/sigstore/model-transparency
+- https://www.localmaxxing.com/en/models
 - https://blog.sigstore.dev/model-transparency-v1.0/
