@@ -1,5 +1,34 @@
 # Results ledger
 
+## mut-reason-med — 2026-08-25 — **REJECTED** by gate v1.2 (cycle 3, split v2 era)
+
+Mutation: `reasoning_effort: medium` via models.yml extraBody (qwen3.8
+template default is xhigh). Channel probed live pre-run. Full autonomous
+cycle: baseline-v5 → mutate (trap-restored) → sweep → gate.
+
+Gate reasons (REJECT):
+- held_in pass regression: 03-js-slugify 2/2 → 1/2 — reduced reasoning
+  measurably costs spec-following precision on the edge-case task
+- soft-axis regressions on BOTH splits: duration and tokens_out UP (medium
+  effort produced cheaper thinking but WORSE first attempts → more retry
+  turns; tokens_out −62.8% held-in was the lone bright spot, swamped by
+  held-out +24-40% regressions the v1.2 floor now catches — the exact gap
+  the ctxslim promotion exposed, doing its job one cycle later)
+
+Verdict: qwen3.8's default xhigh reasoning EARNS its cost in this harness.
+Cheaper thinking is a false economy for agentic coding. Config restored
+automatically; no harness change.
+
+## baseline-v5 — 2026-08-25 — split v2 era floor
+
+21/22 rollouts pass. Sentinel 04: **6/6 under modern config** (164-398s, no
+timeouts) — closes gemini's k-bound ask; the pass-rate recovery is causal,
+not luck. Task 09 (minted from production): **1/2 on its first agent
+attempts** — r1 exhibited a NEW failure mode (ran 115s, exited cleanly,
+never touched the excised stub: claimed-done-without-doing); r2 passed.
+Real headroom from minted tasks on day one; next weakness-mining specimen.
+
+
 ## Attribution experiment VERDICT — 2026-08-24 — improvements CONFIRMED CAUSAL, credit reassigned
 
 48 rollouts, per-task interleaved (same evening, same server), 3 arms × k=2:

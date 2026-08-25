@@ -1,0 +1,201 @@
+{
+ "gate_version": 3,
+ "split_version": 2,
+ "baseline": "baseline-v5",
+ "candidate": "mut-reason-med",
+ "min_k": 2,
+ "effect_threshold": 0.15,
+ "decision": "REJECT",
+ "reasons": [
+  "held_in regression: 03-js-slugify pass 1.00->0.50",
+  "soft-axis regression: duration_p50 117.5->137.0",
+  "soft-axis regression: tokens_out_p50 15505.5->25237.5",
+  "held_out soft-axis regression: duration_p50 247.0->356.5",
+  "held_out soft-axis regression: tokens_out_p50 45174.5->55978.0",
+  "held_out soft-axis regression: tokens_in_p50 739073.5->1033095.0"
+ ],
+ "improved_axes": [
+  "tokens_in_p50"
+ ],
+ "evidence": {
+  "held_in": {
+   "baseline": {
+    "01-py-pagination": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 12.5,
+     "tokens_out_p50": 1095.5,
+     "tokens_in_p50": 88504.0
+    },
+    "03-js-slugify": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 55.5,
+     "tokens_out_p50": 8516.0,
+     "tokens_in_p50": 156346.5
+    },
+    "05-py-dedupe": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 32.0,
+     "tokens_out_p50": 4025.0,
+     "tokens_in_p50": 186485.5
+    },
+    "06-py-version-sync": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 17.5,
+     "tokens_out_p50": 1869.0,
+     "tokens_in_p50": 135708.0
+    }
+   },
+   "candidate": {
+    "01-py-pagination": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 18.5,
+     "tokens_out_p50": 1146.0,
+     "tokens_in_p50": 99874.5
+    },
+    "03-js-slugify": {
+     "k": 2,
+     "pass_rate": 0.5,
+     "duration_p50": 79.5,
+     "tokens_out_p50": 19650.0,
+     "tokens_in_p50": 97772.0
+    },
+    "05-py-dedupe": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 23.0,
+     "tokens_out_p50": 2813.5,
+     "tokens_in_p50": 146878.5
+    },
+    "06-py-version-sync": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 16.0,
+     "tokens_out_p50": 1628.0,
+     "tokens_in_p50": 134438.0
+    }
+   }
+  },
+  "held_out": {
+   "baseline": {
+    "02-py-config-type": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 17.0,
+     "tokens_out_p50": 1716.5,
+     "tokens_in_p50": 135235.5
+    },
+    "08-py-report-bleed": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 110.0,
+     "tokens_out_p50": 18200.5,
+     "tokens_in_p50": 347184.5
+    },
+    "09-proxy-concurrency-cap": {
+     "k": 2,
+     "pass_rate": 0.5,
+     "duration_p50": 120.0,
+     "tokens_out_p50": 25257.5,
+     "tokens_in_p50": 256653.5
+    }
+   },
+   "candidate": {
+    "02-py-config-type": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 16.5,
+     "tokens_out_p50": 1596.5,
+     "tokens_in_p50": 136142.0
+    },
+    "08-py-report-bleed": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 196.5,
+     "tokens_out_p50": 33663.0,
+     "tokens_in_p50": 416453.5
+    },
+    "09-proxy-concurrency-cap": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 143.5,
+     "tokens_out_p50": 20718.5,
+     "tokens_in_p50": 480499.5
+    }
+   }
+  },
+  "soft_axes": {
+   "duration_p50": {
+    "baseline": 117.5,
+    "candidate": 137.0,
+    "rel_improvement": -0.166
+   },
+   "tokens_out_p50": {
+    "baseline": 15505.5,
+    "candidate": 25237.5,
+    "rel_improvement": -0.6276
+   },
+   "tokens_in_p50": {
+    "baseline": 567044.0,
+    "candidate": 478963.0,
+    "rel_improvement": 0.1553
+   }
+  },
+  "held_out_soft_axes": {
+   "duration_p50": {
+    "baseline": 247.0,
+    "candidate": 356.5,
+    "rel_change": -0.4433
+   },
+   "tokens_out_p50": {
+    "baseline": 45174.5,
+    "candidate": 55978.0,
+    "rel_change": -0.2392
+   },
+   "tokens_in_p50": {
+    "baseline": 739073.5,
+    "candidate": 1033095.0,
+    "rel_change": -0.3978
+   }
+  }
+ },
+ "sentinel_advisory": {
+  "04-sh-backup": {
+   "baseline": {
+    "k": 6,
+    "pass_rate": 1.0,
+    "duration_p50": 230.5,
+    "tokens_out_p50": 31223.5,
+    "tokens_in_p50": 866470.0
+   },
+   "candidate": {
+    "k": 2,
+    "pass_rate": 1.0,
+    "duration_p50": 119.5,
+    "tokens_out_p50": 16000.0,
+    "tokens_in_p50": 445984.5
+   }
+  },
+  "07-py-lru-ttl": {
+   "baseline": {
+    "k": 2,
+    "pass_rate": 1.0,
+    "duration_p50": 86.5,
+    "tokens_out_p50": 13550.0,
+    "tokens_in_p50": 327906.0
+   },
+   "candidate": {
+    "k": 2,
+    "pass_rate": 1.0,
+    "duration_p50": 47.0,
+    "tokens_out_p50": 7883.0,
+    "tokens_in_p50": 145123.0
+   }
+  }
+ },
+ "rollback_target": "56cabed19acfb1f14d4ea2c779932c198dbdf5bc"
+}
