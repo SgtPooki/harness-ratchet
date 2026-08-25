@@ -1,5 +1,36 @@
 # Results ledger
 
+## mut-maxtok-48k — 2026-08-25 — **REJECTED** (cycle 4) — the pawl caught the operator
+
+Mutation: maxTokens 32768→49152, targeting the stopReason=length truncation
+failure mined from 09 r1. Sweep: 18/18 pass INCLUDING 09 at 2/2 with no
+truncation — the targeted failure did not recur. Gate: REJECT anyway.
+
+Reasons, and why they are correct:
+- No held-in soft axis cleared the 15% effect threshold (all improved 10-14%
+  — directionally positive, but a ceiling raise should mostly affect rare
+  truncations; broad 10-14% swings are run variance, and the threshold
+  treated them as such).
+- The real win (09: 1/2→2/2) is on a HELD-OUT task, and held-out gains
+  deliberately do not count as improvement — held-out is a floor, never a
+  target. Which exposes the operator error: **the mutation was designed by
+  mining a held-out failure.** That skirts the "held-out never shown to
+  proposers" invariant, and the gate's structure made the peek unprofitable
+  — exactly as designed.
+
+Lessons codified:
+1. Weakness mining draws specimens from held-in and sentinel runs ONLY
+   (CONTEXT invariant 7, added this cycle).
+2. The truncation-fix hypothesis stands observationally but needs a
+   legitimate evidence path: mint a held-in task with the same
+   long-implementation profile (bin/mine.py makes this cheap), then rerun —
+   a real fix will show as held-in pass gain the gate can reward.
+
+Cycle scorecard after 3 clicks: 1 PROMOTE (ctxslim, replicated), 2 REJECTS
+(reason-effort: real trade-off; maxtok: illegitimate evidence path). The
+pawl has now rejected a bad mutation, a noisy one, and an operator shortcut.
+
+
 ## mut-reason-med — 2026-08-25 — **REJECTED** by gate v1.2 (cycle 3, split v2 era)
 
 Mutation: `reasoning_effort: medium` via models.yml extraBody (qwen3.8

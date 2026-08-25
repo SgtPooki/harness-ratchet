@@ -1,0 +1,195 @@
+{
+ "gate_version": 3,
+ "split_version": 2,
+ "baseline": "baseline-v5",
+ "candidate": "mut-maxtok-48k",
+ "min_k": 2,
+ "effect_threshold": 0.15,
+ "decision": "REJECT",
+ "reasons": [
+  "no soft axis improved by >=15%",
+  "held_out soft-axis regression: tokens_in_p50 739073.5->908013.0"
+ ],
+ "improved_axes": [],
+ "evidence": {
+  "held_in": {
+   "baseline": {
+    "01-py-pagination": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 12.5,
+     "tokens_out_p50": 1095.5,
+     "tokens_in_p50": 88504.0
+    },
+    "03-js-slugify": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 55.5,
+     "tokens_out_p50": 8516.0,
+     "tokens_in_p50": 156346.5
+    },
+    "05-py-dedupe": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 32.0,
+     "tokens_out_p50": 4025.0,
+     "tokens_in_p50": 186485.5
+    },
+    "06-py-version-sync": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 17.5,
+     "tokens_out_p50": 1869.0,
+     "tokens_in_p50": 135708.0
+    }
+   },
+   "candidate": {
+    "01-py-pagination": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 17.5,
+     "tokens_out_p50": 1120.5,
+     "tokens_in_p50": 88573.0
+    },
+    "03-js-slugify": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 71.5,
+     "tokens_out_p50": 11202.5,
+     "tokens_in_p50": 195898.0
+    },
+    "05-py-dedupe": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 24.0,
+     "tokens_out_p50": 2492.0,
+     "tokens_in_p50": 193327.0
+    },
+    "06-py-version-sync": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 20.5,
+     "tokens_out_p50": 2423.5,
+     "tokens_in_p50": 148531.5
+    }
+   }
+  },
+  "held_out": {
+   "baseline": {
+    "02-py-config-type": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 17.0,
+     "tokens_out_p50": 1716.5,
+     "tokens_in_p50": 135235.5
+    },
+    "08-py-report-bleed": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 110.0,
+     "tokens_out_p50": 18200.5,
+     "tokens_in_p50": 347184.5
+    },
+    "09-proxy-concurrency-cap": {
+     "k": 2,
+     "pass_rate": 0.5,
+     "duration_p50": 120.0,
+     "tokens_out_p50": 25257.5,
+     "tokens_in_p50": 256653.5
+    }
+   },
+   "candidate": {
+    "02-py-config-type": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 25.5,
+     "tokens_out_p50": 2573.5,
+     "tokens_in_p50": 198348.5
+    },
+    "08-py-report-bleed": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 77.5,
+     "tokens_out_p50": 12346.5,
+     "tokens_in_p50": 244771.5
+    },
+    "09-proxy-concurrency-cap": {
+     "k": 2,
+     "pass_rate": 1.0,
+     "duration_p50": 128.0,
+     "tokens_out_p50": 13616.0,
+     "tokens_in_p50": 464893.0
+    }
+   }
+  },
+  "soft_axes": {
+   "duration_p50": {
+    "baseline": 117.5,
+    "candidate": 133.5,
+    "rel_improvement": -0.1362
+   },
+   "tokens_out_p50": {
+    "baseline": 15505.5,
+    "candidate": 17238.5,
+    "rel_improvement": -0.1118
+   },
+   "tokens_in_p50": {
+    "baseline": 567044.0,
+    "candidate": 626329.5,
+    "rel_improvement": -0.1046
+   }
+  },
+  "held_out_soft_axes": {
+   "duration_p50": {
+    "baseline": 247.0,
+    "candidate": 231.0,
+    "rel_change": 0.0648
+   },
+   "tokens_out_p50": {
+    "baseline": 45174.5,
+    "candidate": 28536.0,
+    "rel_change": 0.3683
+   },
+   "tokens_in_p50": {
+    "baseline": 739073.5,
+    "candidate": 908013.0,
+    "rel_change": -0.2286
+   }
+  }
+ },
+ "sentinel_advisory": {
+  "04-sh-backup": {
+   "baseline": {
+    "k": 6,
+    "pass_rate": 1.0,
+    "duration_p50": 230.5,
+    "tokens_out_p50": 31223.5,
+    "tokens_in_p50": 866470.0
+   },
+   "candidate": {
+    "k": 2,
+    "pass_rate": 1.0,
+    "duration_p50": 347.0,
+    "tokens_out_p50": 44993.5,
+    "tokens_in_p50": 496908.5
+   }
+  },
+  "07-py-lru-ttl": {
+   "baseline": {
+    "k": 2,
+    "pass_rate": 1.0,
+    "duration_p50": 86.5,
+    "tokens_out_p50": 13550.0,
+    "tokens_in_p50": 327906.0
+   },
+   "candidate": {
+    "k": 2,
+    "pass_rate": 1.0,
+    "duration_p50": 72.5,
+    "tokens_out_p50": 12695.0,
+    "tokens_in_p50": 178598.0
+   }
+  }
+ },
+ "rollback_target": "4a79eae9f8e97a4559a9d4cc9f799a5545dae848"
+}

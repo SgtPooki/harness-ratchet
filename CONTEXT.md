@@ -52,3 +52,7 @@ If a change needs a term to mean something else, change this file first.
 5. One mutation per candidate label (process-enforced via the manifest's
    declared surface; not yet mechanically verified).
 6. Agents never see `verify/`, `solution/`, or `sabotage/`.
+7. Weakness mining draws failure specimens from held-in and sentinel runs
+   ONLY. Mining a held-out failure to design a mutation is optimizing
+   against the floor (cycle-4 operator error; the gate made the peek
+   unprofitable, this rule makes it illegal).
