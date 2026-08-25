@@ -39,6 +39,13 @@ If a change needs a term to mean something else, change this file first.
 - **admission record** — per-task `admission.json`: the miner's audit
   attestation (oracle triple, mutant kills, stability). Never authoritative;
   consumers re-execute the audit.
+- **finding** — the unit of publication: one mutation (as a single
+  **surface operation** on one declared surface) plus its claim schema,
+  evidence, and replication instructions; identified by its hr-fd-1 digest.
+  kind: improvement or negative-result.
+- **standing overlays** — infrastructure config applied identically to BOTH
+  arms of a comparison (e.g. eval isolation, previously promoted overlays).
+  Part of a finding's baseline_harness block; never part of the mutation.
 - **split** — the pinned assignment in `split.json`: **held-in** (visible to
   proposers), **held-out** (non-regression floor, never shown to proposers),
   **sentinel** (never optimized against; drift canary only).
