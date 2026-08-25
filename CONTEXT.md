@@ -46,6 +46,10 @@ If a change needs a term to mean something else, change this file first.
 - **standing overlays** — infrastructure config applied identically to BOTH
   arms of a comparison (e.g. eval isolation, previously promoted overlays).
   Part of a finding's baseline_harness block; never part of the mutation.
+- **bootstrap pack** — the nine public tasks in this repo's `tasks/`,
+  kept permanently as demo and floor rails (already public, so burned as
+  headroom by definition). The operator's **personal bank** is a separate,
+  never-published pack plus era state; it starts empty of these.
 - **split** — the pinned assignment in `split.json`: **held-in** (visible to
   proposers), **held-out** (non-regression floor, never shown to proposers),
   **sentinel** (never optimized against; drift canary only).
