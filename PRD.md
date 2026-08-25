@@ -65,18 +65,13 @@ mechanical evidence gates, and every rejected change has a recorded reason.
 
 ## Someday (explicitly post-M5, kept here so it doesn't creep)
 
-- Author a harness challenge on yukon.org (the autoresearch-challenge
-  platform behind mlxfast): pinned local model + locked loop + editable
-  harness surfaces + HIDDEN task bank scored by bin/gate.py. Yukon supplies
-  platform/queue/leaderboard, so the "no service" fence is NOT the blocker —
-  the prerequisite is M4 (excision miner mints tasks solvers have never
-  seen). Revisit after M4. Their conventions worth porting sooner:
-  editablePaths-style surface manifest (mechanizes invariant 5),
-  Fiat-Shamir-derived task inputs. The larger product vision (a focused
-  harness-engineering challenge network + leaderboard, Yukon-style mechanics,
-  localmaxxing-style dashboard, everything in GitHub) is captured in the
-  operator's notes vault (projects/harness-engineering-platform.md) — this
-  repo stays the verification kit that would power it.
+The long-term destination lives in VISION.md: a replication network for
+harness findings, with this repo as the verification kernel. VISION.md
+supersedes in intent the challenge-platform sketch that previously lived
+here; competition (a yukon.org-style challenge with a hidden task bank) is
+now an optional future module of that network, not the trunk. Yukon
+conventions still worth porting sooner: an editablePaths-style surface
+manifest (mechanizes invariant 5) and Fiat-Shamir-derived task inputs.
 
 ## Milestones
 
@@ -93,3 +88,7 @@ mechanical evidence gates, and every rejected change has a recorded reason.
 - 2026-08-24: v1.1 — review edits: exact gated axes + pinned baseline in
   metric 2, mechanical rollback definition, scoreboard-immutability and
   sentinel fences added (codex/gemini/cursor round).
+- 2026-08-25: v1.2: Someday section rewritten to defer to VISION.md (the
+  replication-network destination), which supersedes the challenge-platform
+  sketch in intent. Scope, non-goals, and milestones unchanged; this PRD
+  still governs current work.
