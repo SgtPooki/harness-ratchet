@@ -10,6 +10,10 @@ spec.json:
     "module": "/abs/path/to/module.py", // file whose function gets excised
     "tests": "/abs/path/to/test_x.py",  // existing tests = the hidden oracle
     "function": "dispatch",             // function/method name to excise
+    "package": "orchestrator",          // optional: dotted package the tests
+                                        // import the module through; the module
+                                        // lands at <pkg>/<module> with empty
+                                        // __init__.py files (omit for flat)
     "deps": ["pytest", "pytest-asyncio", "httpx", "starlette"],
     "prompt": "one-paragraph task statement shown to the agent",
     "pytest_args": ["-o", "asyncio_mode=auto"]   // optional
@@ -59,24 +63,40 @@ def excise(src, func_name):
     raise SystemExit(f"mine: function {func_name!r} not found")
 
 
-def mutate(src):
-    """Flip the first comparison operator found inside any function body."""
-    class Flipper(ast.NodeTransformer):
-        def __init__(self):
-            self.done = False
+def mutants(src, func_name):
+    """Yield one flipped-comparison mutant per Compare op INSIDE the excised
+    function (a flip elsewhere — e.g. in a helper the tests mock — proves
+    nothing about the oracle; the task-10 minting lesson)."""
+    count = 0
+    while True:
+        class Flipper(ast.NodeTransformer):
+            seen = 0
+            done = False
 
-        def visit_Compare(self, node):
-            if not self.done and type(node.ops[0]) in FLIP:
-                node.ops[0] = FLIP[type(node.ops[0])]()
-                self.done = True
-            return node
+            def visit_Compare(self, node):
+                self.generic_visit(node)
+                if not self.done and type(node.ops[0]) in FLIP:
+                    if self.seen == count:
+                        node.ops[0] = FLIP[type(node.ops[0])]()
+                        self.done = True
+                    self.seen += 1
+                return node
 
-    tree = ast.parse(src)
-    f = Flipper()
-    tree = f.visit(tree)
-    if not f.done:
-        raise SystemExit("mine: no comparison operator to mutate — supply sabotage/ manually")
-    return ast.unparse(tree) + "\n"
+        tree = ast.parse(src)
+        target = next((n for n in ast.walk(tree)
+                       if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                       and n.name == func_name), None)
+        if target is None:
+            raise SystemExit(f"mine: function {func_name!r} not found")
+        f = Flipper()
+        f.visit(target)
+        if not f.done:
+            if count == 0:
+                raise SystemExit("mine: no comparison operator in the target "
+                                 "function — supply sabotage/ manually")
+            return
+        yield ast.unparse(tree) + "\n"
+        count += 1
 
 
 def write_verify(vdir, test_name, deps, pytest_args):
@@ -112,33 +132,51 @@ def main():
     for d in ("workspace", "verify", "solution", "sabotage"):
         (base / d).mkdir(parents=True, exist_ok=True)
 
-    (base / "workspace" / module.name).write_text(excise(src, spec["function"]))
-    (base / "solution" / module.name).write_text(src)
-    (base / "sabotage" / module.name).write_text(mutate(src))
+    pkg_parts = spec.get("package", "").split(".") if spec.get("package") else []
+    rel = Path(*pkg_parts) / module.name if pkg_parts else Path(module.name)
+    for d, text in (("workspace", excise(src, spec["function"])), ("solution", src)):
+        (base / d / rel).parent.mkdir(parents=True, exist_ok=True)
+        (base / d / rel).write_text(text)
+    # package importability lives in the workspace (the base every overlay sits on)
+    for i in range(1, len(pkg_parts) + 1):
+        init = base / "workspace" / Path(*pkg_parts[:i]) / "__init__.py"
+        if not init.exists():
+            init.write_text("")
     shutil.copy(tests, base / "verify" / tests.name)
     (base / "prompt.md").write_text(spec["prompt"].rstrip() + "\n")
     write_verify(base / "verify", tests.name, spec["deps"], spec.get("pytest_args", []))
 
-    # Admission audit
-    verdicts = {}
-    for variant, overlays in (("unmodified", []), ("solution", ["solution"]),
-                              ("sabotage", ["solution", "sabotage"])):
+    def variant_passes(*overlay_texts):
         tmp = Path(tempfile.mkdtemp())
         shutil.copytree(base / "workspace", tmp, dirs_exist_ok=True)
-        for o in overlays:
-            shutil.copytree(base / o, tmp, dirs_exist_ok=True)
-        verdicts[variant] = run_verify(base / "verify", tmp).returncode == 0
+        for text in overlay_texts:
+            (tmp / rel).write_text(text)
+        ok = run_verify(base / "verify", tmp).returncode == 0
         shutil.rmtree(tmp)
-    stable = all(
-        run_verify(base / "verify",
-                   (lambda t: (shutil.copytree(base / "workspace", t, dirs_exist_ok=True),
-                               shutil.copytree(base / "solution", t, dirs_exist_ok=True), t)[-1])(
-                       Path(tempfile.mkdtemp()))).returncode == 0
-        for _ in range(3))
+        return ok
 
-    ok = (not verdicts["unmodified"]) and verdicts["solution"] and (not verdicts["sabotage"]) and stable
-    print(f"unmodified fails: {not verdicts['unmodified']} | solution passes: {verdicts['solution']} | "
-          f"sabotage fails: {not verdicts['sabotage']} | stable x3: {stable}")
+    # Admission audit: oracle triple + mutant hunt + stability.
+    # Sabotage = the FIRST killed comparison-flip mutant of the excised
+    # function; the kill ratio over all its flip-mutants is reported so weak
+    # spots are visible in the mint record even when admission succeeds.
+    unmodified_fails = not variant_passes()
+    solution_passes = variant_passes(src)
+    killed = total = 0
+    sabotage_text = None
+    for m in mutants(src, spec["function"]):
+        total += 1
+        if not variant_passes(m):
+            killed += 1
+            if sabotage_text is None:
+                sabotage_text = m
+    if sabotage_text is not None:
+        (base / "sabotage" / rel).parent.mkdir(parents=True, exist_ok=True)
+        (base / "sabotage" / rel).write_text(sabotage_text)
+    stable = all(variant_passes(src) for _ in range(3))
+
+    ok = unmodified_fails and solution_passes and sabotage_text is not None and stable
+    print(f"unmodified fails: {unmodified_fails} | solution passes: {solution_passes} | "
+          f"mutants killed: {killed}/{total} | stable x3: {stable}")
     print(f"{'ADMITTED' if ok else 'REJECTED'}: {base}")
     if not ok and admit:
         shutil.rmtree(base)

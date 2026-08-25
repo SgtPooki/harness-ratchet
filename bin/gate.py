@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """The ratchet's pawl: mechanical promote/reject for a candidate run vs baseline.
 
-Usage: bin/gate.py <baseline-label> <candidate-label> [--min-k 2] [--effect 0.15]
+Usage:
+  bin/gate.py <baseline-label> <candidate-label> [--min-k 2] [--effect 0.15]
+  bin/gate.py --set-active <baseline-label> [--configs a.yml,b.yml]
+
+Era registry (v1.3): runs/ACTIVE_BASELINE pins the comparison baseline —
+label, split_version, gate_version, model, and sha256 of the standing config
+overlays. Every gate invocation verifies the requested baseline against the
+registry instead of operator memory; mismatches are data errors (exit 2),
+never verdicts. Re-point deliberately with --set-active after recording a new
+baseline (a split or gate change REQUIRES a new baseline first).
 
 Reads runs/<label>/results.jsonl for both labels and split.json, then decides:
 
@@ -25,13 +34,17 @@ Exit 0 = PROMOTE, 1 = REJECT, 2 = usage/data error.
 """
 
 import argparse
+import hashlib
 import json
 import statistics
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+GATE_VERSION = 4
+ACTIVE = ROOT / "runs" / "ACTIVE_BASELINE"
 
 
 def load_results(label):
@@ -55,17 +68,91 @@ def agg(rows):
     }
 
 
+def sha256_file(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def head_commit():
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def set_active(label, configs):
+    rows = load_results(label)
+    models = sorted({r["model"] for rs in rows.values() for r in rs})
+    if len(models) != 1:
+        sys.exit(f"gate: {label} mixes models {models}; a baseline must be single-model")
+    split = json.loads((ROOT / "split.json").read_text())
+    cfg_hashes = {}
+    for c in configs:
+        p = ROOT / c
+        if not p.is_file():
+            sys.exit(f"gate: config {c} not found")
+        cfg_hashes[c] = sha256_file(p)
+    reg = {
+        "label": label, "split_version": split["split_version"],
+        "gate_version": GATE_VERSION, "model": models[0],
+        "config_sha256": cfg_hashes, "set_at_commit": head_commit(),
+        "ts": int(time.time()),
+    }
+    ACTIVE.write_text(json.dumps(reg, indent=1) + "\n")
+    print(f"active baseline -> {label} (split v{split['split_version']}, "
+          f"gate v{GATE_VERSION}, model {models[0]})")
+    print(f"registry: {ACTIVE} — commit it (git add -f) with the baseline's ledger entry")
+
+
+def check_era(args, split, base, cand):
+    """Registry checks: all failures are data errors (exit 2), never verdicts."""
+    if not ACTIVE.is_file():
+        sys.exit("gate: no runs/ACTIVE_BASELINE — record one with "
+                 "bin/gate.py --set-active <label>")
+    reg = json.loads(ACTIVE.read_text())
+    errs = []
+    if args.baseline != reg["label"]:
+        errs.append(f"baseline {args.baseline!r} is not the active baseline "
+                    f"{reg['label']!r} (re-point with --set-active if deliberate)")
+    if reg["split_version"] != split["split_version"]:
+        errs.append(f"era mismatch: registry split v{reg['split_version']} vs "
+                    f"split.json v{split['split_version']} — record a new baseline first")
+    if reg["gate_version"] != GATE_VERSION:
+        errs.append(f"gate changed (registry v{reg['gate_version']} vs v{GATE_VERSION}) "
+                    "— re-record the baseline under the current gate")
+    for c, want in reg.get("config_sha256", {}).items():
+        p = ROOT / c
+        have = sha256_file(p) if p.is_file() else "<missing>"
+        if have != want:
+            errs.append(f"config ancestry broken: {c} changed since the baseline "
+                        "was recorded — the comparison is cross-era")
+    models = sorted({r["model"] for rs in list(base.values()) + list(cand.values()) for r in rs})
+    if models != [reg["model"]]:
+        errs.append(f"model mismatch: registry {reg['model']!r} vs run rows {models}")
+    if errs:
+        sys.exit("gate: era-registry check failed:\n  - " + "\n  - ".join(errs))
+    return reg
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("baseline")
-    ap.add_argument("candidate")
+    ap.add_argument("baseline", nargs="?")
+    ap.add_argument("candidate", nargs="?")
     ap.add_argument("--min-k", type=int, default=2)
     ap.add_argument("--effect", type=float, default=0.15,
                     help="minimum relative improvement on a soft axis")
+    ap.add_argument("--set-active", metavar="LABEL",
+                    help="point runs/ACTIVE_BASELINE at LABEL and exit")
+    ap.add_argument("--configs", default="mutations/eval-isolation.yml,mutations/ctxslim-v1.yml",
+                    help="comma-separated standing config overlays to pin (with --set-active)")
     args = ap.parse_args()
+
+    if args.set_active:
+        set_active(args.set_active, [c for c in args.configs.split(",") if c])
+        return
+    if not args.baseline or not args.candidate:
+        ap.error("baseline and candidate are required (or use --set-active)")
 
     split = json.loads((ROOT / "split.json").read_text())
     base, cand = load_results(args.baseline), load_results(args.candidate)
+    check_era(args, split, base, cand)
 
     reasons, evidence = [], {}
 
@@ -142,10 +229,9 @@ def main():
             for t in split["sentinel"]}
 
     decision = "PROMOTE" if not reasons else "REJECT"
-    rollback = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
-                              capture_output=True, text=True).stdout.strip()
+    rollback = head_commit()
     manifest = {
-        "gate_version": 3, "split_version": split["split_version"],
+        "gate_version": GATE_VERSION, "split_version": split["split_version"],
         "baseline": args.baseline, "candidate": args.candidate,
         "min_k": args.min_k, "effect_threshold": args.effect,
         "decision": decision, "reasons": reasons, "improved_axes": improved,
