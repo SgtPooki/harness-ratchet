@@ -113,13 +113,9 @@ def _mutation_files(op: dict, out: Path) -> None:
         raise ExportError(f"export: op kind {kind!r} is not exportable")
 
 
-def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
-                   kind: str, submitter: str, out_root: Path,
-                   target_finding: str | None = None,
-                   home: str | None = None) -> Path:
-    """Build <out_root>/<slug>-<digest12>/ from runs/<candidate>. Returns the
-    finding directory path."""
-    home = home or str(Path.home())
+def _load_claim_grade_run(cfg: RatchetConfig, candidate: str,
+                          kind: str) -> tuple[dict, dict]:
+    """Load and gate-keep the candidate run: every refusal is a locked rule."""
     run_root = cfg.runs_dir / candidate
     manifest_p = run_root / "manifest.json"
     op_p = run_root / "op.json"
@@ -142,28 +138,84 @@ def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
     if manifest["decision"] != want:
         raise ExportError(f"export: kind {kind} requires a {want} manifest; "
                           f"this one is {manifest['decision']}")
+    return manifest, op_rec
 
-    registry = load_registry(cfg.active_baseline)
-    split = json.loads(cfg.split_file.read_text())
-    if split["split_version"] != manifest["split_version"]:
-        raise ExportError("export: split.json version differs from the "
-                          "manifest's; the era moved on")
-    gated = split["held_in"] + split["held_out"]
-    pack = _pack_of(cfg, gated + split["sentinel"])
+
+def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
+                 split: dict, pack: dict, op_kind: str, final_k: int) -> dict:
     fingerprint = _operator_file(cfg.era_dir, "model-fingerprint.json",
                                  "the hr-mf-1 block (compute weights_digest "
                                  "where the weights live)")
     engine = _operator_file(cfg.era_dir, "engine-envelope.json",
                             "engine name/version, quantization, context "
                             "window, max tokens, and sampling")
+    overlays = [{"path": p, "sha256": h}
+                for p, h in sorted(registry["config_sha256"].items())]
+    return engine, {
+        "kit_commit": manifest["rollback_target"] or registry["set_at_commit"],
+        "decision": manifest["decision"],
+        "improved_axes": manifest["improved_axes"],
+        "gate": {"gate_version": manifest["gate_version"],
+                 "min_k": manifest["min_k"],
+                 "effect_threshold": manifest["effect_threshold"]},
+        "k": final_k,
+        "baseline_label": manifest["baseline"],
+        "candidate_label": manifest["candidate"],
+        "pack": pack,
+        "split": {"algorithm": "hr-sd-1",
+                  "digest": split_digest(split["split_version"],
+                                         split["held_in"], split["held_out"],
+                                         split["sentinel"]),
+                  "split_version": split["split_version"],
+                  "roles": {r: split[r] for r in
+                            ("held_in", "held_out", "sentinel")}},
+        "baseline_harness": {"standing_overlays": overlays},
+        "channel_liveness": _channel_liveness(cfg, op_kind),
+        "model_fingerprint": fingerprint,
+        "runtime_envelope": {**engine.get("runtime_envelope", {}),
+                             "omp_model_alias": cfg.model,
+                             "timeout_s": cfg.timeout_s,
+                             "concurrency": manifest.get("concurrency", 1)},
+        "sweep_cost": {"baseline": registry.get("sweep_cost", {}),
+                       "candidate": manifest.get("sweep_cost", {})},
+    }
+
+
+def _write_evidence(ev: Path, cfg: RatchetConfig, manifest: dict,
+                    run_root: Path, wanted: set[str], home: str) -> None:
+    ev.mkdir()
+    shutil.copy(run_root / "manifest.json", ev / "manifest.json")
+    for label, src in (("candidate", run_root),
+                       ("baseline", cfg.runs_dir / manifest["baseline"])):
+        rows = [_cap_verify_tail(json.loads(line))
+                for line in (src / "results.jsonl").read_text().splitlines()
+                if line.strip() and json.loads(line)["task"] in wanted]
+        text = "\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n"
+        (ev / f"{label}.results.jsonl").write_text(_redact(text, home))
+
+
+def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
+                   kind: str, submitter: str, out_root: Path,
+                   target_finding: str | None = None,
+                   home: str | None = None) -> Path:
+    """Build <out_root>/<slug>-<digest12>/ from runs/<candidate>. Returns the
+    finding directory path."""
+    home = home or str(Path.home())
+    manifest, op_rec = _load_claim_grade_run(cfg, candidate, kind)
+    final_k = manifest.get("final_k", op_rec.get("k", 0))
+
+    registry = load_registry(cfg.active_baseline)
+    split = json.loads(cfg.split_file.read_text())
+    if split["split_version"] != manifest["split_version"]:
+        raise ExportError("export: split.json version differs from the "
+                          "manifest's; the era moved on")
+    all_tasks = split["held_in"] + split["held_out"] + split["sentinel"]
+    pack = _pack_of(cfg, all_tasks)
 
     op = {"kind": op_rec["op"]["kind"],
           "payload": {k: v for k, v in op_rec["op"].items() if k != "kind"}}
-    surface_digest = sha256_hex(canonical_json(op).encode())
-
-    overlays = [{"path": p, "sha256": h}
-                for p, h in sorted(registry["config_sha256"].items())]
-
+    engine, claim = _claim_block(cfg, manifest, registry, split, pack,
+                                 op["kind"], final_k)
     doc = {
         "format_version": 1,
         "digest": None,
@@ -172,46 +224,18 @@ def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
         "created": datetime.date.today().isoformat(),
         "license": REGISTRY_LICENSE_DEFAULT,
         "submitter_identity": submitter,
-        "harness": {"id": "omp", "version": engine.get("harness_version", "unknown"),
-                    "surface_digest": surface_digest},
+        "harness": {"id": "omp",
+                    "version": engine.get("harness_version", "unknown"),
+                    "surface_digest": sha256_hex(canonical_json(op).encode())},
         "declared_surface": op["kind"],
         "operations": [op],
-        "claim": {
-            "kit_commit": manifest["rollback_target"] or registry["set_at_commit"],
-            "decision": manifest["decision"],
-            "improved_axes": manifest["improved_axes"],
-            "gate": {"gate_version": manifest["gate_version"],
-                     "min_k": manifest["min_k"],
-                     "effect_threshold": manifest["effect_threshold"]},
-            "k": final_k,
-            "baseline_label": manifest["baseline"],
-            "candidate_label": manifest["candidate"],
-            "pack": pack,
-            "split": {"algorithm": "hr-sd-1",
-                      "digest": split_digest(split["split_version"],
-                                             split["held_in"],
-                                             split["held_out"],
-                                             split["sentinel"]),
-                      "split_version": split["split_version"],
-                      "roles": {r: split[r] for r in
-                                ("held_in", "held_out", "sentinel")}},
-            "baseline_harness": {"standing_overlays": overlays},
-            "channel_liveness": _channel_liveness(cfg, op["kind"]),
-            "model_fingerprint": fingerprint,
-            "runtime_envelope": {**engine.get("runtime_envelope", {}),
-                                 "omp_model_alias": cfg.model,
-                                 "timeout_s": cfg.timeout_s,
-                                 "concurrency": manifest.get("concurrency", 1)},
-            "sweep_cost": {"baseline": registry.get("sweep_cost", {}),
-                           "candidate": manifest.get("sweep_cost", {})},
-        },
+        "claim": claim,
     }
     if target_finding:
         doc["target_finding"] = target_finding
 
-    errors = validation_errors("finding", doc)
     # the digest is filled after assembly; a null digest is valid mid-build
-    errors = [e for e in errors if "digest" not in e]
+    errors = [e for e in validation_errors("finding", doc) if "digest" not in e]
     if errors:
         raise ExportError("export: finding.json fails its own schema:\n  - "
                           + "\n  - ".join(errors))
@@ -223,22 +247,8 @@ def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
     try:
         (tmp / "finding.json").write_text(canonical_json(doc))
         _mutation_files(op, tmp / "mutation")
-        ev = tmp / "evidence"
-        ev.mkdir()
-        shutil.copy(manifest_p, ev / "manifest.json")
-        wanted = set(gated + split["sentinel"])
-        for label, src in (("candidate", run_root),
-                           ("baseline", cfg.runs_dir / manifest["baseline"])):
-            rows = []
-            for line in (src / "results.jsonl").read_text().splitlines():
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                if row["task"] in wanted:
-                    rows.append(_cap_verify_tail(row))
-            text = "\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n"
-            (ev / f"{label}.results.jsonl").write_text(_redact(text, home))
-
+        _write_evidence(tmp / "evidence", cfg, manifest,
+                        cfg.runs_dir / candidate, set(all_tasks), home)
         digest = finding_digest(tmp)
         doc["digest"] = digest
         (tmp / "finding.json").write_text(canonical_json(doc))

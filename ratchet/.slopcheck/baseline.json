@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "files_analyzed": 18,
-  "function_count": 115,
-  "erosion": 0.4912,
-  "duplication": 0.02,
+  "files_analyzed": 19,
+  "function_count": 127,
+  "erosion": 0.4787,
+  "duplication": 0.0178,
   "duplicated_lines": 43,
-  "total_code_lines": 2149,
+  "total_code_lines": 2422,
   "max_ccn": 41,
   "dead_code": null,
   "dead_code_tool": null,
@@ -49,8 +49,14 @@
     {
       "file": "cli.py",
       "name": "cmd_mint( args )",
+      "ccn": 13,
+      "nloc": 47
+    },
+    {
+      "file": "export.py",
+      "name": "export_finding( cfg : RatchetConfig , * , candidate : str , slug : str , kind : str , submitter : str , out_root : Path , target_finding : str | None = None , home : str | None = None )",
       "ccn": 12,
-      "nloc": 46
+      "nloc": 63
     },
     {
       "file": "runner/ops.py",
