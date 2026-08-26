@@ -1,5 +1,19 @@
 # Results ledger
 
+## baseline-v6 — 2026-08-26 — split v3 era floor, first sweep through the rewrite
+
+39/40 at k=4 over the nine bootstrap tasks plus the private held-in task
+10, recorded with `ratchet baseline sweep` (the rewritten runner's first
+production sweep) and pinned with `baseline set-active` into the bank's
+era registry. Standing-overlay hashes are byte-identical to the v5
+registry: config ancestry unbroken across the rewrite. The one miss is
+09 at 3/4 (its claimed-done headroom mode, up from 1/2 in v5). Task 10
+passed 4/4 on its first agent attempts (75.5s p50), which makes the
+cycle-5 maxTokens re-test a live question, not a formality. An earlier
+sweep attempt was aborted and discarded when concurrent omp use shared
+the GPU and inflated 04 to 788s; era floors are recorded on a quiet
+machine or not at all.
+
 ## Bank created, era moves out, split v3 — 2026-08-26 (build step 3)
 
 The personal bank exists (private repo, consumed via a local pack path;
