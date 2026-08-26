@@ -1,5 +1,27 @@
 # Results ledger
 
+## mut-maxtok-49k — 2026-08-26 — **REJECTED** (cycle 5, the lawful re-test)
+
+maxTokens 32768->49152 through `ratchet click` (model-param op, fail-closed
+selector, trap-restored), motivated by the private held-in task 10 — the
+legitimate evidence path cycle 4 demanded. Gate: REJECT, one reason: no
+held-in soft axis improved by >=15%. Held-in passed 4/4 everywhere in BOTH
+arms, so there was no pass gain to reward.
+
+The interesting part: the hypothesis is REAL but lives on the wrong side of
+the split. Held-out 09 went 3/4 -> 4/4 under the raised cap, and one of its
+rollouts emitted 40,840 output tokens — past the old cap, so the truncation
+mechanism exists. Held-out gains deliberately never count (floor, not
+target). Cycle 4 rejected this mutation for peeking at held-out evidence;
+cycle 5 gave it the lawful test and the effect failed to appear where it
+may be rewarded. The hypothesis is now settled, not shelved: the cap binds
+rarely, on tasks the operator's own headroom does not currently reach.
+Sentinel advisory: 04 and 07 each dropped one rollout (3/4 vs 4/4 floor);
+watch for repeats.
+
+First full cycle through the rewritten CLI end to end: sweep, era check,
+structured op, gate, restore — one command, evidence on disk.
+
 ## baseline-v6 — 2026-08-26 — split v3 era floor, first sweep through the rewrite
 
 39/40 at k=4 over the nine bootstrap tasks plus the private held-in task
