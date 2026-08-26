@@ -286,3 +286,95 @@ def test_spec_load_support_field(tmp_path, entangled_source):
     p.write_text(json.dumps(doc))
     spec = MintSpec.load(p)
     assert spec.support == [entangled_source / "units.py"]
+
+
+PKG_UTIL = '''\
+def half(x):
+    return x // 2
+'''
+
+PKG_CORE = '''\
+from mypkg.util import half
+
+def bounded_half(value, hi):
+    """Half the value, capped at hi."""
+    v = half(value)
+    if v > hi:
+        return hi
+    return v
+'''
+
+PKG_TEST = '''\
+from mypkg.core import bounded_half
+from tests.helpers import CASES
+
+def test_cases():
+    for value, hi, want in CASES:
+        assert bounded_half(value, hi) == want
+'''
+
+PKG_HELPERS = '''\
+CASES = [(10, 100, 5), (10, 3, 3), (0, 9, 0)]
+'''
+
+
+@pytest.fixture()
+def package_source(tmp_path):
+    src = tmp_path / "pkgrepo"
+    (src / "mypkg").mkdir(parents=True)
+    (src / "mypkg" / "__init__.py").write_text("")
+    (src / "mypkg" / "util.py").write_text(PKG_UTIL)
+    (src / "mypkg" / "core.py").write_text(PKG_CORE)
+    (src / "tests").mkdir()
+    (src / "tests" / "__init__.py").write_text("")
+    (src / "tests" / "helpers.py").write_text(PKG_HELPERS)
+    (src / "tests" / "test_core.py").write_text(PKG_TEST)
+    (src / "mypkg" / "__pycache__").mkdir()
+    (src / "mypkg" / "__pycache__" / "junk.pyc").write_text("x")
+    return src
+
+
+def package_spec(src, **over):
+    kw = dict(name="92-bounded-half", module=src / "mypkg" / "core.py",
+              tests=src / "tests", test_file="test_core.py",
+              function="bounded_half",
+              prompt="Implement bounded_half per its docstring.",
+              deps=["pytest"], package_root=src / "mypkg")
+    kw.update(over)
+    return MintSpec(**kw)
+
+
+def test_mint_package_root_admitted(package_source, tmp_path):
+    result = mint(package_spec(package_source), tmp_path / "bank-tasks")
+    assert result.admitted, result.failure_reason
+    tdir = tmp_path / "bank-tasks" / "92-bounded-half"
+    ws = tdir / "workspace" / "mypkg"
+    # the whole package tree rides along, junk excluded, target excised
+    assert (ws / "util.py").read_text() == PKG_UTIL
+    assert (ws / "__init__.py").is_file()
+    assert not (ws / "__pycache__").exists()
+    assert "NotImplementedError" in (ws / "core.py").read_text()
+    # solution and sabotage stay single-file overlays at the package rel
+    assert (tdir / "solution" / "mypkg" / "core.py").read_text() == PKG_CORE
+    assert not (tdir / "solution" / "mypkg" / "util.py").exists()
+    # the tests tree (helpers and all) is the verifier
+    assert (tdir / "verify" / "tests" / "helpers.py").is_file()
+
+
+def test_preflight_package_root(package_source):
+    assert preflight(package_spec(package_source)) is None
+
+
+def test_tests_dir_requires_test_file(package_source, tmp_path):
+    from ratchet.miner.excision import MintError
+    with pytest.raises(MintError, match="test_file"):
+        mint(package_spec(package_source, test_file=""), tmp_path / "t")
+
+
+def test_module_outside_package_root_is_mint_error(package_source, tmp_path):
+    from ratchet.miner.excision import MintError
+    spec = package_spec(package_source,
+                        module=package_source / "tests" / "helpers.py",
+                        function="anything")
+    with pytest.raises(MintError, match="not under"):
+        mint(spec, tmp_path / "t")

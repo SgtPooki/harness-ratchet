@@ -56,6 +56,15 @@ class MintSpec:
     # byte-verbatim into the workspace beside the target module. Never
     # excised, never mutated: they are context, not the task.
     support: list[Path] = field(default_factory=list)
+    # For targets inside a real package (the public-floor case): the
+    # package's top-level directory, copied verbatim into the workspace
+    # with only the target module's file overwritten by the excision.
+    # When set, `package` is ignored (the tree carries its own __init__s)
+    # and `module` must live under this directory.
+    package_root: Path | None = None
+    # When `tests` is a DIRECTORY (fixture files, helpers, __init__.py),
+    # the relative path inside it of the test file to run.
+    test_file: str = ""
 
     @classmethod
     def load(cls, path: Path) -> "MintSpec":
@@ -66,7 +75,10 @@ class MintSpec:
                        prompt=doc["prompt"], deps=list(doc["deps"]),
                        package=doc.get("package", ""),
                        pytest_args=list(doc.get("pytest_args", [])),
-                       support=[Path(p) for p in doc.get("support", [])])
+                       support=[Path(p) for p in doc.get("support", [])],
+                       package_root=(Path(doc["package_root"])
+                                     if doc.get("package_root") else None),
+                       test_file=doc.get("test_file", ""))
         except KeyError as e:
             raise MintError(f"{path}: spec missing {e}") from e
 
@@ -141,13 +153,17 @@ def write_verify(vdir: Path, test_name: str, deps: list[str],
                  pytest_args: list[str]) -> None:
     with_args = " ".join(f'"--with", "{d}",' for d in deps)
     extra = "".join(f' "{a}",' for a in pytest_args)
+    # PYTHONPATH carries the workspace AND the verify dir: a tests package
+    # copied wholesale (tests/__init__.py, tests/helpers.py) imports as
+    # tests.* relative to the verify dir.
     (vdir / "verify.py").write_text(f'''import os, subprocess, sys
 ws = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
 here = os.path.dirname(os.path.abspath(__file__))
 r = subprocess.run(["uv", "run", "--quiet", "--no-project", {with_args}
      "pytest", "-q", "-p", "no:cacheprovider",{extra}
      os.path.join(here, "{test_name}")],
-    env=dict(os.environ, PYTHONPATH=ws), capture_output=True, text=True, timeout=300)
+    env=dict(os.environ, PYTHONPATH=ws + os.pathsep + here),
+    capture_output=True, text=True, timeout=300)
 if r.returncode != 0:
     print(r.stdout[-1500:]); print(r.stderr[-500:]); raise SystemExit(1)
 print("PASS")
@@ -166,26 +182,69 @@ def preflight(spec: MintSpec, runs: int = 2) -> str | None:
     before any excision. Returns a failure reason or None."""
     tmp = Path(tempfile.mkdtemp(prefix="mine-preflight-"))
     try:
-        rel = _module_rel(spec)
-        (tmp / "ws" / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp / "ws" / rel).write_text(spec.module.read_text())
-        _write_support(tmp / "ws", spec)
-        _write_package_inits(tmp / "ws", spec)
+        ws = tmp / "ws"
+        ws.mkdir()
+        _materialize_workspace(ws, spec, spec.module.read_text())
         vdir = tmp / "verify"
         vdir.mkdir()
-        shutil.copy(spec.tests, vdir / spec.tests.name)
-        write_verify(vdir, spec.tests.name, spec.deps, spec.pytest_args)
+        _materialize_verify(vdir, spec)
         for _ in range(runs):
-            if not _run_verify(vdir, tmp / "ws"):
+            if not _run_verify(vdir, ws):
                 return "baseline-failure"
         return None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+JUNK = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo",
+                              ".git", ".DS_Store", "Thumbs.db")
+
+
 def _module_rel(spec: MintSpec) -> Path:
+    if spec.package_root:
+        try:
+            inner = spec.module.relative_to(spec.package_root)
+        except ValueError:
+            raise MintError(f"mine: module {spec.module} is not under "
+                            f"package_root {spec.package_root}") from None
+        return Path(spec.package_root.name) / inner
     pkg_parts = spec.package.split(".") if spec.package else []
     return Path(*pkg_parts) / spec.module.name if pkg_parts else Path(spec.module.name)
+
+
+def _materialize_workspace(ws: Path, spec: MintSpec, module_text: str) -> None:
+    """Lay down the agent-visible tree: the whole package (package_root
+    mode) or the module plus support siblings, with the target module's
+    file holding module_text (excised for the task, verbatim for
+    preflight)."""
+    rel = _module_rel(spec)
+    if spec.package_root:
+        shutil.copytree(spec.package_root, ws / spec.package_root.name,
+                        ignore=JUNK)
+    (ws / rel).parent.mkdir(parents=True, exist_ok=True)
+    (ws / rel).write_text(module_text)
+    _write_support(ws, spec)
+    if not spec.package_root:
+        _write_package_inits(ws, spec)
+
+
+def _materialize_verify(vdir: Path, spec: MintSpec) -> None:
+    """Copy the tests (a single file, or a whole tests tree with fixtures
+    and helpers plus a test_file selector) and write verify.py against
+    them."""
+    if spec.tests.is_dir():
+        if not spec.test_file:
+            raise MintError("mine: tests is a directory; the spec needs "
+                            "test_file (the file inside it to run)")
+        shutil.copytree(spec.tests, vdir / spec.tests.name, ignore=JUNK)
+        target = f"{spec.tests.name}/{spec.test_file}"
+        if not (vdir / target).is_file():
+            raise MintError(f"mine: test_file {spec.test_file!r} not found "
+                            f"under {spec.tests}")
+    else:
+        shutil.copy(spec.tests, vdir / spec.tests.name)
+        target = spec.tests.name
+    write_verify(vdir, target, spec.deps, spec.pytest_args)
 
 
 def _write_support(ws: Path, spec: MintSpec) -> None:
@@ -230,15 +289,13 @@ def mint(spec: MintSpec, out_dir: Path) -> MintResult:
             excised = excise(src, spec.function)
         except (MintError, SyntaxError) as e:
             raise MintError(f"excision failed: {e}") from e
-        for d, text in (("workspace", excised), ("solution", src)):
-            (base / d / rel).parent.mkdir(parents=True, exist_ok=True)
-            (base / d / rel).write_text(text)
-        # package importability lives in the workspace (the base every overlay sits on)
-        _write_support(base / "workspace", spec)
-        _write_package_inits(base / "workspace", spec)
-        shutil.copy(spec.tests, base / "verify" / spec.tests.name)
+        # workspace = the base every overlay sits on; solution and
+        # sabotage stay pure overlays of the target module's file
+        _materialize_workspace(base / "workspace", spec, excised)
+        (base / "solution" / rel).parent.mkdir(parents=True, exist_ok=True)
+        (base / "solution" / rel).write_text(src)
+        _materialize_verify(base / "verify", spec)
         (base / "prompt.md").write_text(spec.prompt.rstrip() + "\n")
-        write_verify(base / "verify", spec.tests.name, spec.deps, spec.pytest_args)
 
         def variant_passes(*overlay_texts):
             tmp = Path(tempfile.mkdtemp())
