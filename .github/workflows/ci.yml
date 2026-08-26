@@ -7,7 +7,13 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # macOS to match the operator platform: task 04's reference solution
+    # relies on BSD stat (on GNU, `stat -f` succeeds in filesystem mode and
+    # prints garbage, so its GNU fallback never fires) and therefore fails
+    # its verifier on Linux. Making backup.sh portable is a content change
+    # to a public task surface (a new vintage) and needs an operator
+    # decision; until then Linux cannot audit the bootstrap pack.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
