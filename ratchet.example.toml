@@ -1,0 +1,29 @@
+# Example operator config for pre-bank CI and test use (issue #2, point 3).
+# Real operators run `ratchet init <bank-path>` instead; this file mirrors the
+# kit's own layout so audit/baseline/probe can run against the bootstrap pack
+# without a bank. Relative paths resolve against this file's directory.
+
+[paths]
+runs_dir = "runs"   # local rollout evidence; gitignored
+# Pre-bank, the kit's era state is split across the legacy layout (split.json
+# at the repo root, ACTIVE_BASELINE under runs/) and is owned by bin/gate.py.
+# era_dir matters once a bank exists (build step 3 migrates era state there);
+# `baseline set-active` and held-in selection expect split.json inside it.
+era_dir = "runs"
+
+[packs]
+bootstrap = "tasks"
+bank = "tasks"      # the kit has no bank; bootstrap-only config
+
+[runner]
+harness = "omp"
+model = "vllm/homelab-default"
+timeout_s = 900
+k = 2
+
+[overlays.standing]
+# Applied identically to BOTH arms of every comparison; never a mutation.
+paths = [
+  "mutations/eval-isolation.yml",
+  "mutations/ctxslim-v1.yml",
+]

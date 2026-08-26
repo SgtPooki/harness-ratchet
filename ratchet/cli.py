@@ -1,23 +1,38 @@
 """The `ratchet` console command: eight verbs (issue #2, point 4).
 
-Build step 1 implements audit (the CI entry point, with --materialize).
-The other verbs exist now so the command shape is stable, and exit 2 with
-a pointer to the build-order step that implements them.
+Implemented: audit (step 1), init, baseline sweep / set-active, probe
+(step 2). Still deferred: click (step 5), mint (step 6), export and
+replicate (step 7) — they exit 2 with a pointer to their build-order step.
 """
 
 import argparse
 import datetime
 import json
+import subprocess
 import sys
+import time
+from importlib import resources
 from pathlib import Path
 
 import ratchet
+from ratchet.config import ConfigError, load_config
+from ratchet.kernel.era import EraError, build_registry
+from ratchet.kernel.gate import GateDataError
 from ratchet.kernel.oracle import admit_task
 from ratchet.kernel.pack import PackError, materialize_bootstrap, validate_pack
 
-_DEFERRED = {
-    "init": 2, "mint": 6, "baseline": 2, "click": 5,
-    "export": 7, "replicate": 7, "probe": 2,
+_DEFERRED = {"mint": 6, "click": 5, "export": 7, "replicate": 7}
+
+SPLIT_TEMPLATE = {
+    "_comment": ("Pinned task split for this bank's era. Roles: held_in "
+                 "(visible to proposers), held_out (non-regression floor, "
+                 "never shown to proposers), sentinel (drift canary, never "
+                 "optimized against). Bump split_version on any change and "
+                 "record a new baseline."),
+    "split_version": 0,
+    "held_in": [],
+    "held_out": [],
+    "sentinel": [],
 }
 
 
@@ -97,6 +112,168 @@ def cmd_audit(args) -> int:
     return 1 if fail else 0
 
 
+def _kit_overlay_sources() -> list:
+    """The kit's standing overlays, for migration into a bank at init.
+
+    Installed wheels carry them as package data (ratchet/data/overlays,
+    force-included from mutations/); editable/dev checkouts fall back to
+    the repo's mutations/ directory.
+    """
+    pkg = resources.files("ratchet") / "data" / "overlays"
+    if pkg.is_dir():
+        return sorted(p for p in pkg.iterdir() if p.name.endswith(".yml"))
+    repo = Path(ratchet.__file__).resolve().parent.parent / "mutations"
+    if repo.is_dir():
+        return sorted(repo.glob("*.yml"))
+    return []
+
+
+def cmd_init(args) -> int:
+    """Scaffold a personal bank: dirs, era state, ratchet.toml (issue #2 pt 3)."""
+    root = Path(args.path)
+    toml_path = root / "ratchet.toml"
+    if toml_path.exists():
+        print(f"init: {toml_path} already exists", file=sys.stderr)
+        return 2
+    for d in ("tasks", "runs", "era", "overlays"):
+        (root / d).mkdir(parents=True, exist_ok=True)
+
+    overlay_rels = []
+    for src in _kit_overlay_sources():
+        dst = root / "overlays" / src.name
+        dst.write_bytes(src.read_bytes())
+        overlay_rels.append(f"overlays/{src.name}")
+
+    (root / "era" / "split.json").write_text(json.dumps(SPLIT_TEMPLATE, indent=1) + "\n")
+    (root / ".gitignore").write_text("/runs/\n")
+
+    bootstrap = args.bootstrap_pack
+    if bootstrap is None:
+        kit_tasks = Path(ratchet.__file__).resolve().parent.parent / "tasks"
+        bootstrap = str(kit_tasks) if (kit_tasks / "pack.json").is_file() \
+            else "CHANGE-ME/path/to/bootstrap-pack"
+    overlay_lines = "".join(f'  "{p}",\n' for p in overlay_rels)
+    toml_path.write_text(f'''# harness-ratchet operator config (v1 schema, issue #2 point 3).
+# Relative paths resolve against this file's directory.
+
+[paths]
+runs_dir = "runs"   # local rollout evidence; gitignored
+era_dir = "era"     # split.json + ACTIVE_BASELINE: the comparison era
+
+[packs]
+bootstrap = "{bootstrap}"
+bank = "tasks"      # this bank's own pack root; starts empty
+
+[runner]
+harness = "omp"
+model = "{args.model}"
+timeout_s = 900
+k = 2
+
+[overlays.standing]
+# Applied identically to BOTH arms of every comparison; never a mutation.
+paths = [
+{overlay_lines}]
+''')
+    print(f"bank scaffolded at {root}")
+    print(f"  config:   {toml_path}")
+    print(f"  overlays: {len(overlay_rels)} standing overlay(s) migrated from the kit")
+    print("  era:      split.json v0 (empty; roles fill as tasks are minted)")
+    return 0
+
+
+def _load_cfg(args):
+    return load_config(getattr(args, "config", None))
+
+
+def _select_tasks(pack_root: Path, selector: list[str], split_file: Path) -> list[str]:
+    on_disk = sorted(p.name for p in pack_root.iterdir()
+                     if p.is_dir() and not p.name.startswith(".")
+                     and p.name != "__pycache__")
+    if selector == ["all"]:
+        return on_disk
+    if selector == ["held-in"]:
+        if not split_file.is_file():
+            raise ConfigError(f"held-in selection needs {split_file}")
+        held = json.loads(split_file.read_text())["held_in"]
+        missing = sorted(set(held) - set(on_disk))
+        if missing:
+            raise ConfigError(f"held_in tasks not in pack: {missing}")
+        return held
+    missing = sorted(set(selector) - set(on_disk))
+    if missing:
+        raise ConfigError(f"tasks not in pack {pack_root}: {missing}")
+    return selector
+
+
+def cmd_baseline_sweep(args) -> int:
+    from ratchet.runner.base import RolloutSpec
+    from ratchet.runner.omp import OmpRunner
+
+    cfg = _load_cfg(args)
+    pack_root = Path(args.pack) if args.pack else cfg.bootstrap_pack
+    tasks = _select_tasks(pack_root, args.tasks, cfg.split_file)
+    k = args.k or cfg.k
+    model = args.model or cfg.model
+    timeout_s = args.timeout_s or cfg.timeout_s
+    run_root = cfg.runs_dir / args.label
+    run_root.mkdir(parents=True, exist_ok=True)
+    runner = OmpRunner()
+    for task_id in tasks:
+        for i in range(1, k + 1):
+            row = runner.run_rollout(RolloutSpec(
+                task_dir=pack_root / task_id, task_id=task_id, rollout=i,
+                label=args.label, run_root=run_root, model=model,
+                timeout_s=timeout_s,
+                standing_overlays=cfg.standing_overlays,
+                extra_config=Path(args.extra_config) if args.extra_config else None,
+                extra_sys=args.extra_sys,
+            ))
+            print(f"[{task_id} r{i}] pass={str(row.passed).lower()} "
+                  f"rc={row.agent_rc} {row.duration_s}s")
+    print(f"results: {run_root / 'results.jsonl'}")
+    return 0
+
+
+def cmd_baseline_set_active(args) -> int:
+    from ratchet.kernel.gate import load_results
+
+    cfg = _load_cfg(args)
+    results = load_results(cfg.runs_dir / args.label / "results.jsonl")
+    split = json.loads(cfg.split_file.read_text())
+    if args.configs is not None:
+        configs = [c for c in args.configs.split(",") if c]
+    else:
+        configs = [str(p.relative_to(cfg.root)) for p in cfg.standing_overlays]
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cfg.root,
+                            capture_output=True, text=True).stdout.strip()
+    reg = build_registry(label=args.label, results=results, split=split,
+                         configs=configs, config_root=cfg.root,
+                         set_at_commit=commit, ts=int(time.time()))
+    cfg.era_dir.mkdir(parents=True, exist_ok=True)
+    cfg.active_baseline.write_text(json.dumps(reg, indent=1) + "\n")
+    print(f"active baseline -> {args.label} (split v{split['split_version']}, "
+          f"gate v{reg['gate_version']}, model {reg['model']})")
+    print(f"registry: {cfg.active_baseline} — commit it with the baseline's ledger entry")
+    return 0
+
+
+def cmd_probe(args) -> int:
+    from ratchet.runner.omp import OmpRunner
+    from ratchet.runner.probe import probe_channel
+
+    cfg = _load_cfg(args)
+    runner = OmpRunner()
+    result = probe_channel(runner, args.channel, model=cfg.model,
+                           timeout_s=cfg.timeout_s,
+                           out_dir=cfg.runs_dir / "probes",
+                           standing_overlays=cfg.standing_overlays)
+    verdict = "LIVE" if result.observed else "DEAD"
+    print(f"channel {args.channel}: {verdict} (token {result.token}, "
+          f"agent rc={result.rc}, record in {cfg.runs_dir / 'probes'})")
+    return 0 if result.observed else 1
+
+
 def _deferred(verb: str):
     def run(_args) -> int:
         print(f"ratchet {verb}: not implemented yet — arrives in build step "
@@ -126,12 +303,56 @@ def main(argv=None) -> int:
                          help="re-materialize over an existing pack.json")
     p_audit.set_defaults(fn=cmd_audit)
 
-    for verb in ("init", "mint", "baseline", "click", "export", "replicate", "probe"):
+    p_init = sub.add_parser("init", help="scaffold a personal bank (dirs, era state, ratchet.toml)")
+    p_init.add_argument("path", help="bank root to create")
+    p_init.add_argument("--bootstrap-pack", default=None,
+                        help="path to the bootstrap pack (default: autodetect the kit's tasks/)")
+    p_init.add_argument("--model", default="vllm/homelab-default",
+                        help="omp model alias written into ratchet.toml")
+    p_init.set_defaults(fn=cmd_init)
+
+    p_base = sub.add_parser("baseline", help="record and pin comparison baselines")
+    base_sub = p_base.add_subparsers(dest="subverb", required=True)
+    p_sweep = base_sub.add_parser("sweep", help="run rollouts and append results.jsonl")
+    p_sweep.add_argument("label")
+    p_sweep.add_argument("--tasks", nargs="+", default=["all"],
+                         help="task ids, or 'all' / 'held-in' (default: all)")
+    p_sweep.add_argument("--k", type=int, default=None, help="rollouts per task (default: config)")
+    p_sweep.add_argument("--pack", default=None, help="pack root (default: config bootstrap)")
+    p_sweep.add_argument("--model", default=None, help="model alias override (default: config)")
+    p_sweep.add_argument("--timeout-s", type=int, default=None,
+                         help="rollout timeout override (default: config)")
+    p_sweep.add_argument("--extra-config", default=None,
+                         help="candidate omp --config overlay (the mutation artifact)")
+    p_sweep.add_argument("--extra-sys", default=None,
+                         help="trust-header-wrapped --append-system-prompt text (loop-only channel)")
+    p_sweep.add_argument("--config", default=None, help="ratchet.toml path")
+    p_sweep.set_defaults(fn=cmd_baseline_sweep)
+    p_setactive = base_sub.add_parser("set-active", help="pin the era's comparison baseline")
+    p_setactive.add_argument("label")
+    p_setactive.add_argument("--configs", default=None,
+                             help="comma-separated overlay paths to pin (default: config standing overlays)")
+    p_setactive.add_argument("--config", default=None, help="ratchet.toml path")
+    p_setactive.set_defaults(fn=cmd_baseline_set_active)
+
+    p_probe = sub.add_parser("probe", help="channel liveness: observable-token test")
+    p_probe.add_argument("channel", choices=["rules", "append-system-prompt"])
+    p_probe.add_argument("--config", default=None, help="ratchet.toml path")
+    p_probe.set_defaults(fn=cmd_probe)
+
+    for verb in ("mint", "click", "export", "replicate"):
         p = sub.add_parser(verb, help=f"(build step {_DEFERRED[verb]}; not yet implemented)")
         p.set_defaults(fn=_deferred(verb))
 
     args = ap.parse_args(argv)
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except (ConfigError, EraError) as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    except GateDataError as e:
+        print(str(e), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

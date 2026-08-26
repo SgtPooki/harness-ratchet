@@ -5,8 +5,7 @@ import pytest
 from ratchet.cli import main
 
 
-@pytest.mark.parametrize("verb", ["init", "mint", "baseline", "click",
-                                  "export", "replicate", "probe"])
+@pytest.mark.parametrize("verb", ["mint", "click", "export", "replicate"])
 def test_deferred_verbs_exit_2(verb, capsys):
     assert main([verb]) == 2
     assert "not implemented yet" in capsys.readouterr().err
