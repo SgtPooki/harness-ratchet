@@ -8,8 +8,10 @@ replicate (step 7) — they exit 2 with a pointer to their build-order step.
 import argparse
 import datetime
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from importlib import resources
 from pathlib import Path
@@ -23,7 +25,7 @@ from ratchet.kernel.oracle import admit_task
 from ratchet.kernel.pack import PackError, materialize_bootstrap, validate_pack
 from ratchet.runner.ops import OpError
 
-_DEFERRED = {"mint": 6, "export": 7, "replicate": 7}
+_DEFERRED = {"export": 7, "replicate": 7}
 
 SPLIT_TEMPLATE = {
     "_comment": ("Pinned task split for this bank's era. Roles: held_in "
@@ -328,6 +330,130 @@ def cmd_click(args) -> int:
     return code
 
 
+def _git_provenance(path: Path) -> dict:
+    """Best-effort source provenance for the mint log; nulls off-repo."""
+    def git(*a):
+        r = subprocess.run(["git", "-C", str(path.parent), *a],
+                           capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else None
+    top = git("rev-parse", "--show-toplevel")
+    if not top:
+        return {"repo": None, "commit": None, "subpath": None, "merged_at": None}
+    return {
+        "repo": Path(top).name,
+        "commit": git("rev-parse", "HEAD"),
+        "subpath": str(path.resolve().relative_to(Path(top))),
+        "merged_at": git("log", "-1", "--format=%cI", "--", str(path.resolve())),
+    }
+
+
+def cmd_mint(args) -> int:
+    from ratchet.miner.excision import MintError, MintSpec, mint, preflight
+
+    cfg = _load_cfg(args)
+    try:
+        spec = MintSpec.load(Path(args.spec))
+    except (OSError, ValueError, MintError) as e:
+        print(f"mint: {e}", file=sys.stderr)
+        return 2
+
+    provenance = _git_provenance(spec.module)
+    log_extra = {}
+    if args.preflight:
+        reason = preflight(spec)
+        if reason:
+            _append_mint_log(cfg, spec, args, provenance, outcome="rejected",
+                             failure_reason=reason, oracle_triple={},
+                             mutants={"killed": 0, "total": 0}, stability=[],
+                             duration_s=0)
+            print(f"REJECTED (preflight): {reason}")
+            return 1
+        log_extra["preflight"] = "pass-twice"
+
+    out_dir = cfg.bank_pack if args.admit else Path(tempfile.mkdtemp(prefix="mint-dry-"))
+    try:
+        result = mint(spec, out_dir)
+    except MintError as e:
+        print(f"mint: {e}", file=sys.stderr)
+        return 2
+    finally:
+        if not args.admit:
+            shutil.rmtree(out_dir, ignore_errors=True)
+
+    print(f"unmodified fails: {result.oracle_triple['unmodified_fails']} | "
+          f"solution passes: {result.oracle_triple['solution_passes']} | "
+          f"mutants killed: {result.mutants['killed']}/{result.mutants['total']} | "
+          f"stable: {sum(result.stability)}/{len(result.stability)}")
+
+    if result.admitted and args.admit:
+        _wrap_minted_task(cfg, spec, result, provenance)
+        print(f"ADMITTED: {result.task_dir} (pack.json updated, new vintage)")
+    elif result.admitted:
+        print(f"ADMITTED (dry-run; re-run with --admit to deposit into {cfg.bank_pack})")
+    else:
+        print(f"REJECTED: {result.failure_reason}")
+
+    _append_mint_log(cfg, spec, args, provenance, outcome=result.outcome,
+                     failure_reason=result.failure_reason,
+                     oracle_triple=result.oracle_triple, mutants=result.mutants,
+                     stability=result.stability, duration_s=result.duration_s,
+                     **log_extra)
+    return 0 if result.admitted else 1
+
+
+def _wrap_minted_task(cfg, spec, result, provenance) -> None:
+    from ratchet.kernel.digests import pack_digest
+    from ratchet.kernel.pack import SURFACE_NAMES, infer_requires
+
+    today = datetime.date.today().isoformat()
+    tdir = result.task_dir
+    src = (f"{provenance['repo']}@{provenance['commit'][:7]} {provenance['subpath']}"
+           if provenance["commit"] else None)
+    (tdir / "task.json").write_text(json.dumps({
+        "id": spec.name, "requires": infer_requires(tdir),
+        "surfaces": {s: {"encryption": "plaintext"} for s in SURFACE_NAMES},
+    }, indent=1) + "\n")
+    (tdir / "admission.json").write_text(json.dumps({
+        "task": spec.name,
+        "oracle": result.oracle_triple,
+        "sabotage": "present",
+        "mutants": result.mutants,
+        "stability_runs": len(result.stability),
+        "miner": {"name": "ratchet-mint", "version": ratchet.__version__},
+        "minted": today, "source": src,
+    }, indent=1) + "\n")
+
+    mpath = Path(cfg.bank_pack) / "pack.json"
+    if mpath.is_file():
+        manifest = json.loads(mpath.read_text())
+        manifest["tasks"] = sorted(set(manifest["tasks"]) | {spec.name})
+        manifest["vintage"] = {"number": manifest["vintage"]["number"] + 1,
+                               "date": today}
+    else:
+        manifest = {"format_version": 1, "name": "harness-bank",
+                    "vintage": {"number": 1, "date": today},
+                    "digest_algorithm": "hr-pd-1", "digest": "",
+                    "tasks": [spec.name]}
+    manifest["digest"] = pack_digest(cfg.bank_pack)
+    mpath.write_text(json.dumps(manifest, indent=1) + "\n")
+
+
+def _append_mint_log(cfg, spec, args, provenance, **row_fields) -> None:
+    row = {
+        "created_at": int(time.time()),
+        "duration_s": row_fields.pop("duration_s"),
+        "source": provenance,
+        "target_locator": {"file": provenance.get("subpath") or str(spec.module),
+                           "function": spec.function},
+        "spec": str(Path(args.spec)),
+        **row_fields,
+    }
+    if row.get("failure_reason") is None:
+        row.pop("failure_reason", None)
+    with open(Path(cfg.root) / "mint-log.jsonl", "a") as fh:
+        fh.write(json.dumps(row) + "\n")
+
+
 def _deferred(verb: str):
     def run(_args) -> int:
         print(f"ratchet {verb}: not implemented yet — arrives in build step "
@@ -417,7 +543,18 @@ def main(argv=None) -> int:
     p_probe.add_argument("--config", default=None, help="ratchet.toml path")
     p_probe.set_defaults(fn=cmd_probe)
 
-    for verb in ("mint", "export", "replicate"):
+    p_mint = sub.add_parser("mint", help="excise a task from a real module + test pair")
+    p_mint.add_argument("spec", help="mint spec JSON (name, module, tests, function, "
+                                     "prompt, deps[, package, pytest_args])")
+    p_mint.add_argument("--admit", action="store_true",
+                        help="deposit into the bank pack on admission (default: dry-run)")
+    p_mint.add_argument("--preflight", action="store_true",
+                        help="public-source preflight: tests must pass twice on the "
+                             "unmodified source before excision")
+    p_mint.add_argument("--config", default=None, help="ratchet.toml path")
+    p_mint.set_defaults(fn=cmd_mint)
+
+    for verb in ("export", "replicate"):
         p = sub.add_parser(verb, help=f"(build step {_DEFERRED[verb]}; not yet implemented)")
         p.set_defaults(fn=_deferred(verb))
 
