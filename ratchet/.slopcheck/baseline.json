@@ -1,0 +1,68 @@
+{
+  "version": 2,
+  "files_analyzed": 18,
+  "function_count": 115,
+  "erosion": 0.4912,
+  "duplication": 0.02,
+  "duplicated_lines": 43,
+  "total_code_lines": 2149,
+  "max_ccn": 41,
+  "dead_code": null,
+  "dead_code_tool": null,
+  "high_complexity_functions": [
+    {
+      "file": "kernel/gate.py",
+      "name": "decide( split : dict , base : dict [ str , list [ dict ] ] , cand : dict [ str , list [ dict ] ] , * , baseline_label : str , candidate_label : str , min_k : int = 2 , effect : float = 0 . 15 , rollback_target : str = \"\" )",
+      "ccn": 41,
+      "nloc": 66
+    },
+    {
+      "file": "cli.py",
+      "name": "cmd_audit( args )",
+      "ccn": 24,
+      "nloc": 67
+    },
+    {
+      "file": "cli.py",
+      "name": "cmd_click( args )",
+      "ccn": 22,
+      "nloc": 40
+    },
+    {
+      "file": "click.py",
+      "name": "run_click( cfg : RatchetConfig , * , candidate : str , op : ClickOp , motivated_by : str , k : int | None = None , min_k : int = 2 , effect : float = 0 . 15 , runner : OmpRunner | None = None , rollback_target : str = \"\" )",
+      "ccn": 20,
+      "nloc": 84
+    },
+    {
+      "file": "kernel/pack.py",
+      "name": "validate_pack( root : Path )",
+      "ccn": 18,
+      "nloc": 42
+    },
+    {
+      "file": "miner/excision.py",
+      "name": "mint( spec : MintSpec , out_dir : Path )",
+      "ccn": 14,
+      "nloc": 52
+    },
+    {
+      "file": "cli.py",
+      "name": "cmd_mint( args )",
+      "ccn": 12,
+      "nloc": 46
+    },
+    {
+      "file": "runner/ops.py",
+      "name": "_locate( self , lines : list [ str ] )",
+      "ccn": 12,
+      "nloc": 34
+    },
+    {
+      "file": "kernel/era.py",
+      "name": "check_era( registry : dict , * , baseline_label : str , split : dict , base : dict [ str , list [ dict ] ] , cand : dict [ str , list [ dict ] ] , config_root : Path , gate_version : int = GATE_VERSION )",
+      "ccn": 11,
+      "nloc": 24
+    }
+  ]
+}

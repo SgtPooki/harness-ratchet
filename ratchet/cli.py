@@ -1,8 +1,8 @@
 """The `ratchet` console command: eight verbs (issue #2, point 4).
 
 Implemented: audit (step 1), init, baseline sweep / set-active, probe
-(step 2). Still deferred: click (step 5), mint (step 6), export and
-replicate (step 7) — they exit 2 with a pointer to their build-order step.
+(step 2), click (step 5), mint (step 6), export (step 7). Still deferred:
+replicate — it exits 2 with a pointer to its build-order step.
 """
 
 import argparse
@@ -25,7 +25,7 @@ from ratchet.kernel.oracle import admit_task
 from ratchet.kernel.pack import PackError, materialize_bootstrap, validate_pack
 from ratchet.runner.ops import OpError
 
-_DEFERRED = {"export": 7, "replicate": 7}
+_DEFERRED = {"replicate": 7}
 
 SPLIT_TEMPLATE = {
     "_comment": ("Pinned task split for this bank's era. Roles: held_in "
@@ -464,6 +464,27 @@ def _append_mint_log(cfg, spec, args, provenance, **row_fields) -> None:
         fh.write(json.dumps(row) + "\n")
 
 
+def cmd_export(args) -> int:
+    from ratchet.export import ExportError, export_finding
+
+    cfg = _load_cfg(args)
+    try:
+        out = export_finding(
+            cfg, candidate=args.candidate, slug=args.slug, kind=args.kind,
+            submitter=args.submitter,
+            out_root=Path(args.out) if args.out else cfg.root / "findings",
+            target_finding=args.target_finding)
+    except ExportError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    doc = json.loads((out / "finding.json").read_text())
+    print(f"finding assembled: {out}")
+    print(f"hr-fd-1: {doc['digest']}")
+    print("submit: open a PR adding this directory to the registry repo "
+          "(findings/<harness>/<family-bucket>/<slug>-<digest12>/, #6 layout)")
+    return 0
+
+
 def _deferred(verb: str):
     def run(_args) -> int:
         print(f"ratchet {verb}: not implemented yet — arrives in build step "
@@ -570,9 +591,26 @@ def main(argv=None) -> int:
                              "(default: the bank; use for public floor packs)")
     p_mint.set_defaults(fn=cmd_mint)
 
-    for verb in ("export", "replicate"):
-        p = sub.add_parser(verb, help=f"(build step {_DEFERRED[verb]}; not yet implemented)")
-        p.set_defaults(fn=_deferred(verb))
+    p_export = sub.add_parser(
+        "export", help="assemble a finding directory from a candidate run")
+    p_export.add_argument("candidate", help="candidate label under runs/")
+    p_export.add_argument("--slug", required=True,
+                          help="short mutation name (registry path uses "
+                               "<slug>-<digest12>)")
+    p_export.add_argument("--kind", required=True,
+                          choices=["improvement", "negative-result"])
+    p_export.add_argument("--submitter", required=True,
+                          help="submitter identity, e.g. github:SgtPooki")
+    p_export.add_argument("--target-finding", default=None,
+                          help="hr-fd-1 digest this refutes or supersedes")
+    p_export.add_argument("--out", default=None,
+                          help="output root (default: <bank>/findings)")
+    p_export.add_argument("--config", default=None, help="ratchet.toml path")
+    p_export.set_defaults(fn=cmd_export)
+
+    p = sub.add_parser("replicate",
+                       help=f"(build step {_DEFERRED['replicate']}; not yet implemented)")
+    p.set_defaults(fn=_deferred("replicate"))
 
     args = ap.parse_args(argv)
     try:

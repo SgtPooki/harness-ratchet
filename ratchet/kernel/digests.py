@@ -125,3 +125,14 @@ def finding_digest(root: Path, meta_name: str = "finding.json") -> str:
     return sha256_hex(
         _manifest_text(root, frozenset(), {meta_name: replaced}).encode("utf-8")
     )
+
+
+def weights_digest(weights_dir: Path) -> str:
+    """hr-mf-1 exact-weights identity: sha256 over the same per-file hash
+    manifest text as hr-pd-1, computed over a model weights directory
+    (issue #10; research/model-fingerprinting.md). Returned with the
+    "sha256:" prefix the model_fingerprint block uses. Run this where the
+    weight files live; the digest, not the path, is the identity."""
+    return "sha256:" + sha256_hex(
+        _manifest_text(Path(weights_dir), frozenset(), {}).encode("utf-8")
+    )
