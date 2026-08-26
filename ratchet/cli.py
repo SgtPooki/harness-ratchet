@@ -541,7 +541,10 @@ def main(argv=None) -> int:
     p_click.add_argument("--key", default=None, help="model-param: key to set")
     p_click.add_argument("--value", default=None, help="model-param: payload value")
     p_click.add_argument("--text", default=None, help="rules / append-system-prompt: block text")
-    p_click.add_argument("--k", type=int, default=None, help="rollouts per task (default: config)")
+    p_click.add_argument("--k", type=int, default=None,
+                         help="rollouts per task (default: k=2 screening, "
+                              "escalating to 4 on a screening PROMOTE; "
+                              "pass 4 to skip screening)")
     p_click.add_argument("--min-k", type=int, default=2)
     p_click.add_argument("--effect", type=float, default=0.15)
     p_click.add_argument("--config", default=None, help="ratchet.toml path")

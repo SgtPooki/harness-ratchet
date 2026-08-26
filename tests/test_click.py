@@ -82,8 +82,11 @@ def test_click_rules_full_cycle(bank, tmp_path, capsys):
     op = json.loads((run_root / "op.json").read_text())
     assert op["declared_surface"] == "rules" and op["registry_admissible"] is True
     assert op["apply"]["vacuous"] is False
-    # sentinel swept but advisory-only
-    assert "07-py-lru-ttl" in manifest["sentinel_advisory"]
+    # #12 decision 1: a reject never pays the sentinel bill; the manifest
+    # says so explicitly instead of silently omitting the data
+    assert manifest["sentinel_advisory"] == {"skipped": "rejected before sentinels"}
+    assert manifest["screening_k"] == 2 and manifest["escalated"] is False
+    assert manifest["sweep_cost"]["concurrency"] == 1
 
 
 def test_click_model_param_prior_value_recorded(bank, tmp_path):
