@@ -379,7 +379,8 @@ def cmd_mint(args) -> int:
             return 1
         log_extra["preflight"] = "pass-twice"
 
-    out_dir = cfg.bank_pack if args.admit else Path(tempfile.mkdtemp(prefix="mint-dry-"))
+    dest = Path(args.dest) if args.dest else cfg.bank_pack
+    out_dir = dest if args.admit else Path(tempfile.mkdtemp(prefix="mint-dry-"))
     try:
         result = mint(spec, out_dir)
     except MintError as e:
@@ -395,10 +396,10 @@ def cmd_mint(args) -> int:
           f"stable: {sum(result.stability)}/{len(result.stability)}")
 
     if result.admitted and args.admit:
-        _wrap_minted_task(cfg, spec, result, provenance)
+        _wrap_minted_task(spec, result, provenance, pack_root=dest)
         print(f"ADMITTED: {result.task_dir} (pack.json updated, new vintage)")
     elif result.admitted:
-        print(f"ADMITTED (dry-run; re-run with --admit to deposit into {cfg.bank_pack})")
+        print(f"ADMITTED (dry-run; re-run with --admit to deposit into {dest})")
     else:
         print(f"REJECTED: {result.failure_reason}")
 
@@ -410,7 +411,7 @@ def cmd_mint(args) -> int:
     return 0 if result.admitted else 1
 
 
-def _wrap_minted_task(cfg, spec, result, provenance) -> None:
+def _wrap_minted_task(spec, result, provenance, *, pack_root: Path) -> None:
     from ratchet.kernel.digests import pack_digest
     from ratchet.kernel.pack import SURFACE_NAMES, infer_requires
 
@@ -432,18 +433,18 @@ def _wrap_minted_task(cfg, spec, result, provenance) -> None:
         "minted": today, "source": src,
     }, indent=1) + "\n")
 
-    mpath = Path(cfg.bank_pack) / "pack.json"
+    mpath = Path(pack_root) / "pack.json"
     if mpath.is_file():
         manifest = json.loads(mpath.read_text())
         manifest["tasks"] = sorted(set(manifest["tasks"]) | {spec.name})
         manifest["vintage"] = {"number": manifest["vintage"]["number"] + 1,
                                "date": today}
     else:
-        manifest = {"format_version": 1, "name": "harness-bank",
+        manifest = {"format_version": 1, "name": Path(pack_root).name,
                     "vintage": {"number": 1, "date": today},
                     "digest_algorithm": "hr-pd-1", "digest": "",
                     "tasks": [spec.name]}
-    manifest["digest"] = pack_digest(cfg.bank_pack)
+    manifest["digest"] = pack_digest(pack_root)
     mpath.write_text(json.dumps(manifest, indent=1) + "\n")
 
 
@@ -564,6 +565,9 @@ def main(argv=None) -> int:
                         help="public-source preflight: tests must pass twice on the "
                              "unmodified source before excision")
     p_mint.add_argument("--config", default=None, help="ratchet.toml path")
+    p_mint.add_argument("--dest", default=None,
+                        help="pack root to deposit into on --admit "
+                             "(default: the bank; use for public floor packs)")
     p_mint.set_defaults(fn=cmd_mint)
 
     for verb in ("export", "replicate"):

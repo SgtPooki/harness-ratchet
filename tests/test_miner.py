@@ -378,3 +378,25 @@ def test_module_outside_package_root_is_mint_error(package_source, tmp_path):
                         function="anything")
     with pytest.raises(MintError, match="not under"):
         mint(spec, tmp_path / "t")
+
+
+def test_mint_verb_dest_deposits_elsewhere(source, tmp_path, capsys, monkeypatch):
+    bank = tmp_path / "bank"
+    assert main(["init", str(bank)]) == 0
+    floors = tmp_path / "floors"
+    floors.mkdir()
+    spec = {"name": "93-clamp-floor", "module": str(source / "clamp.py"),
+            "tests": str(source / "test_clamp.py"), "function": "clamp",
+            "prompt": "p", "deps": ["pytest"]}
+    sp = tmp_path / "floor.spec.json"
+    sp.write_text(json.dumps(spec))
+    rc = main(["mint", str(sp), "--admit", "--dest", str(floors),
+               "--config", str(bank / "ratchet.toml")])
+    assert rc == 0
+    assert (floors / "93-clamp-floor" / "task.json").is_file()
+    manifest = json.loads((floors / "pack.json").read_text())
+    assert manifest["name"] == "floors" and manifest["tasks"] == ["93-clamp-floor"]
+    assert manifest["vintage"]["number"] == 1
+    # the mint log still lands bank-side, dest only moves the deposit
+    assert (bank / "mint-log.jsonl").is_file()
+    assert not (bank / "tasks" / "93-clamp-floor").exists()
