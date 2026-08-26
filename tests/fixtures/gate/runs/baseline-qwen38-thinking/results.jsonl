@@ -1,0 +1,8 @@
+{"task": "01-py-pagination", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 80, "verify_tail": "PASS"}
+{"task": "02-py-config-type", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 135, "verify_tail": "PASS"}
+{"task": "03-js-slugify", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 136, "verify_tail": "PASS"}
+{"task": "04-sh-backup", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 790, "verify_tail": "PASS"}
+{"task": "05-py-dedupe", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 80, "verify_tail": "PASS"}
+{"task": "06-py-version-sync", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 86, "verify_tail": "PASS"}
+{"task": "07-py-lru-ttl", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 178, "verify_tail": "PASS"}
+{"task": "08-py-report-bleed", "model": "vllm/homelab-default", "label": "baseline-qwen38-thinking", "pass": true, "agent_rc": 0, "duration_s": 348, "verify_tail": "PASS"}

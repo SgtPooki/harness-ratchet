@@ -1,0 +1,3 @@
+{"task": "04-sh-backup", "model": "vllm/homelab-default", "label": "mutA-minimal-scope", "pass": true, "agent_rc": 0, "duration_s": 840, "verify_tail": "PASS"}
+{"task": "01-py-pagination", "model": "vllm/homelab-default", "label": "mutA-minimal-scope", "pass": true, "agent_rc": 0, "duration_s": 66, "verify_tail": "PASS"}
+{"task": "05-py-dedupe", "model": "vllm/homelab-default", "label": "mutA-minimal-scope", "pass": true, "agent_rc": 0, "duration_s": 85, "verify_tail": "PASS"}

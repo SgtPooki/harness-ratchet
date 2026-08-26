@@ -1,0 +1,16 @@
+{"task": "01-py-pagination", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 17, "tokens_in": 112311, "tokens_out": 1838, "verify_tail": "PASS"}
+{"task": "01-py-pagination", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 13, "tokens_in": 88664, "tokens_out": 1189, "verify_tail": "PASS"}
+{"task": "02-py-config-type", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 18, "tokens_in": 158661, "tokens_out": 1573, "verify_tail": "PASS"}
+{"task": "02-py-config-type", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 21, "tokens_in": 161385, "tokens_out": 2171, "verify_tail": "PASS"}
+{"task": "03-js-slugify", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 67, "tokens_in": 193479, "tokens_out": 10864, "verify_tail": "PASS"}
+{"task": "03-js-slugify", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 57, "tokens_in": 186785, "tokens_out": 9222, "verify_tail": "PASS"}
+{"task": "04-sh-backup", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 167, "tokens_in": 608183, "tokens_out": 24198, "verify_tail": "PASS"}
+{"task": "04-sh-backup", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 422, "tokens_in": 946071, "tokens_out": 55196, "verify_tail": "PASS"}
+{"task": "05-py-dedupe", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 26, "tokens_in": 180564, "tokens_out": 1827, "verify_tail": "PASS"}
+{"task": "05-py-dedupe", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 21, "tokens_in": 180830, "tokens_out": 1787, "verify_tail": "PASS"}
+{"task": "06-py-version-sync", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 25, "tokens_in": 160682, "tokens_out": 2812, "verify_tail": "PASS"}
+{"task": "06-py-version-sync", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 18, "tokens_in": 157328, "tokens_out": 1945, "verify_tail": "PASS"}
+{"task": "07-py-lru-ttl", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 106, "tokens_in": 267590, "tokens_out": 17779, "verify_tail": "PASS"}
+{"task": "07-py-lru-ttl", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 98, "tokens_in": 306818, "tokens_out": 18513, "verify_tail": "PASS"}
+{"task": "08-py-report-bleed", "rollout": 1, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 88, "tokens_in": 170135, "tokens_out": 13747, "verify_tail": "PASS"}
+{"task": "08-py-report-bleed", "rollout": 2, "model": "vllm/homelab-default", "label": "baseline-v4", "pass": true, "agent_rc": 0, "duration_s": 47, "tokens_in": 177410, "tokens_out": 6880, "verify_tail": "PASS"}

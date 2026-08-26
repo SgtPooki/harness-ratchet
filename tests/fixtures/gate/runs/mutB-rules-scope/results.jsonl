@@ -1,0 +1,1 @@
+{"task": "04-sh-backup", "model": "vllm/homelab-default", "label": "mutB-rules-scope", "pass": true, "agent_rc": 124, "duration_s": 900, "verify_tail": "PASS"}
