@@ -15,13 +15,15 @@ from importlib import resources
 from pathlib import Path
 
 import ratchet
+from ratchet.click import ClickError, ClickOp, run_click
 from ratchet.config import ConfigError, load_config
 from ratchet.kernel.era import EraError, build_registry
 from ratchet.kernel.gate import GateDataError
 from ratchet.kernel.oracle import admit_task
 from ratchet.kernel.pack import PackError, materialize_bootstrap, validate_pack
+from ratchet.runner.ops import OpError
 
-_DEFERRED = {"mint": 6, "click": 5, "export": 7, "replicate": 7}
+_DEFERRED = {"mint": 6, "export": 7, "replicate": 7}
 
 SPLIT_TEMPLATE = {
     "_comment": ("Pinned task split for this bank's era. Roles: held_in "
@@ -274,6 +276,58 @@ def cmd_probe(args) -> int:
     return 0 if result.observed else 1
 
 
+def _parse_value(raw: str):
+    for cast in (int, float):
+        try:
+            return cast(raw)
+        except ValueError:
+            continue
+    return raw
+
+
+def cmd_click(args) -> int:
+    cfg = _load_cfg(args)
+    payloads = {
+        "config-overlay": {"overlay": args.overlay},
+        "model-param": {"omp_model_alias": args.selector.split(":")[0] if args.selector else None,
+                        "yaml_id": args.selector.split(":")[1] if args.selector and ":" in args.selector else None,
+                        "key": args.key,
+                        "value": _parse_value(args.value) if args.value is not None else None},
+        "rules": {"text": args.text},
+        "append-system-prompt": {"text": args.text},
+    }
+    payload = payloads[args.op]
+    missing = [k for k, v in payload.items() if v is None]
+    if missing:
+        raise ClickError(f"op {args.op} needs {missing} "
+                         "(--overlay | --selector alias:yaml_id --key --value | --text)")
+    stray = {"config-overlay": args.selector or args.key or args.value or args.text,
+             "model-param": args.overlay or args.text,
+             "rules": args.overlay or args.selector or args.key or args.value,
+             "append-system-prompt": args.overlay or args.selector or args.key or args.value}
+    if stray[args.op]:
+        raise ClickError(f"op {args.op} got flags belonging to a different op "
+                         "(one mutation, one surface: invariant 5)")
+
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cfg.root,
+                            capture_output=True, text=True).stdout.strip()
+    manifest, code = run_click(
+        cfg, candidate=args.candidate, op=ClickOp(kind=args.op, payload=payload),
+        motivated_by=args.motivated_by, k=args.k, min_k=args.min_k,
+        effect=args.effect, rollback_target=commit)
+    print(f"=== GATE: {manifest['decision']} ({args.candidate} vs {manifest['baseline']})")
+    for r in manifest["reasons"]:
+        print(f"  - {r}")
+    for a in manifest["improved_axes"]:
+        print(f"  + improved: {a}")
+    if manifest["decision"] == "PROMOTE":
+        print("promote bookkeeping: make the mutation standing (config-overlay -> "
+              "[overlays.standing]; model-param/rules -> apply permanently), then "
+              "record a new baseline and `baseline set-active` it")
+    print(f"manifest: {cfg.runs_dir / args.candidate / 'manifest.json'}")
+    return code
+
+
 def _deferred(verb: str):
     def run(_args) -> int:
         print(f"ratchet {verb}: not implemented yet — arrives in build step "
@@ -335,22 +389,42 @@ def main(argv=None) -> int:
     p_setactive.add_argument("--config", default=None, help="ratchet.toml path")
     p_setactive.set_defaults(fn=cmd_baseline_set_active)
 
+    p_click = sub.add_parser(
+        "click", help="one mutation cycle: mutate -> rollouts -> gate -> restore")
+    p_click.add_argument("candidate", help="candidate run label (manifest is immutable per label)")
+    p_click.add_argument("--op", required=True,
+                         choices=["config-overlay", "model-param", "rules",
+                                  "append-system-prompt"],
+                         help="the ONE surface operation (invariant 5)")
+    p_click.add_argument("--motivated-by", required=True, metavar="TASK",
+                         help="the failure-pattern task motivating this mutation "
+                              "(sentinel: invalid per invariant 3; held-out: "
+                              "illegal per invariant 7)")
+    p_click.add_argument("--overlay", default=None, help="config-overlay: overlay file")
+    p_click.add_argument("--selector", default=None, metavar="ALIAS:YAML_ID",
+                         help="model-param: omp_model_alias:yaml_id")
+    p_click.add_argument("--key", default=None, help="model-param: key to set")
+    p_click.add_argument("--value", default=None, help="model-param: payload value")
+    p_click.add_argument("--text", default=None, help="rules / append-system-prompt: block text")
+    p_click.add_argument("--k", type=int, default=None, help="rollouts per task (default: config)")
+    p_click.add_argument("--min-k", type=int, default=2)
+    p_click.add_argument("--effect", type=float, default=0.15)
+    p_click.add_argument("--config", default=None, help="ratchet.toml path")
+    p_click.set_defaults(fn=cmd_click)
+
     p_probe = sub.add_parser("probe", help="channel liveness: observable-token test")
     p_probe.add_argument("channel", choices=["rules", "append-system-prompt"])
     p_probe.add_argument("--config", default=None, help="ratchet.toml path")
     p_probe.set_defaults(fn=cmd_probe)
 
-    for verb in ("mint", "click", "export", "replicate"):
+    for verb in ("mint", "export", "replicate"):
         p = sub.add_parser(verb, help=f"(build step {_DEFERRED[verb]}; not yet implemented)")
         p.set_defaults(fn=_deferred(verb))
 
     args = ap.parse_args(argv)
     try:
         return args.fn(args)
-    except (ConfigError, EraError) as e:
-        print(str(e), file=sys.stderr)
-        return 2
-    except GateDataError as e:
+    except (ConfigError, EraError, GateDataError, ClickError, OpError) as e:
         print(str(e), file=sys.stderr)
         return 2
 
