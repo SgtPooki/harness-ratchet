@@ -55,6 +55,36 @@ def agg(rows: list[dict]) -> dict:
     }
 
 
+def reject_certain(split: dict, base: dict[str, list[dict]],
+                   cand_partial: dict[str, list[dict]], planned_k: int) -> str | None:
+    """The #12 early-abort check: is REJECT already certain from a partial
+    candidate sweep, whatever the remaining rollouts do?
+
+    Exactly two pre-registered conditions, both pure pass-rate arithmetic
+    (the #12 resolution, decision 2): for a held-in or held-out task, even
+    if every remaining planned rollout passes, the candidate pass rate ends
+    strictly below the baseline's (equality is non-regression and never
+    aborts). Soft axes are deliberately excluded: medians can move until
+    the final rollout. Returns the triggering condition as a string, or
+    None. Shares no state with decide(); callers gate the partial results
+    as usual (incomplete coverage is already a REJECT under v4 rules).
+    """
+    for role in ("held_in", "held_out"):
+        for t in split[role]:
+            b_rows = base.get(t)
+            if not b_rows:
+                continue
+            base_rate = sum(1 for r in b_rows if r["pass"]) / len(b_rows)
+            rows = cand_partial.get(t, [])
+            passes = sum(1 for r in rows if r["pass"])
+            best = (passes + (planned_k - len(rows))) / planned_k
+            if best < base_rate:
+                return (f"{role} pass certainty: {t} best possible "
+                        f"{passes + planned_k - len(rows)}/{planned_k} < "
+                        f"baseline {base_rate:.2f}")
+    return None
+
+
 def decide(split: dict, base: dict[str, list[dict]], cand: dict[str, list[dict]],
            *, baseline_label: str, candidate_label: str, min_k: int = 2,
            effect: float = 0.15, rollback_target: str = "") -> tuple[dict, int]:
