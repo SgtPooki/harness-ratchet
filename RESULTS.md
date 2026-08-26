@@ -1,5 +1,50 @@
 # Results ledger
 
+## mut-contract-checklist — 2026-08-26 — **REJECTED** (cycle 6, first run of the cheap flow)
+
+Mutation: a RULES.md contract-checklist discipline (extract every
+documented behavior into a checklist, verify item by item, never treat
+self-authored tests as compliance evidence), motivated by the held-in
+task 16's baseline pathology: in all four v7 rollouts the agent wrote
+its own scratch tests, passed them, and declared done while 9-15 of the
+24 hidden human tests failed. Circular self-validation, precisely the
+failure the rule targeted.
+
+Gate: REJECT at k=2 screening. The rule produced a real held-in pass
+gain (03 went 2/2 against a 3/4 baseline floor) but taxed every task
+with a 24 percent tokens_in_p50 regression (1.80M to 2.23M): the agent
+re-reads contract material heavily, and the hard task did not move
+(16 stayed 0/2). A discipline that raises the cost of every task
+without cracking the one it was aimed at is a bad trade; the pawl
+priced it correctly. Screening rejects are not claim-grade under the
+#12 resolution; a k=4 re-proposal stays available if a cheaper phrasing
+of the same discipline is found.
+
+The operational headline: this was the first production run of the #12
+flow, and every piece behaved. Cheap-first held-in-first order was
+visible in the rollout sequence; the certainty conditions armed and
+never fired (16's 0/4 baseline cannot regress); sentinels were skipped
+with the skip recorded in the manifest; the manifest carries
+screening_k, final_k, escalated, screening_verdict, concurrency, and
+sweep_cost. The reject cost 1542s wall and 6.1M tokens_in against the
+63 minutes and 15.3M a v6-era sweep paid: a 59 percent wall and 60
+percent token saving on the first rejected candidate.
+
+## Miner milestone met — 2026-08-26 — floors vintage 5, registry unblocked
+
+Ten admitted tasks from four source repos: six private headroom tasks
+in the bank and four public post-cutoff floors in the kit's new
+floors/ pack (three from sqlglot, one from dspy, all MIT with license
+files embedded, every target's last function-level change dated after
+the subject model's 2026-08-14 release; floors/RECENCY.md carries the
+table). Two rejects logged per the locked taxonomy: an excision-error
+(identity comparisons defeat the comparison-flip auto-mutant) and a
+preflight baseline-failure (sqlfluff's cwd-relative fixture glob). All
+four floors re-audited independently after minting. The miner grew two
+tested capabilities on the way: support modules and package-root
+materialization with tests-tree verifiers. Issues #12 and #13 closed
+the same day; stage-3 registry work (export and replicate) unblocks.
+
 ## baseline-v7 — 2026-08-26 — split v4 era floor, headroom restored
 
 37/44 at k=4 over the nine bootstrap tasks plus private held-in tasks 10
