@@ -1,0 +1,21 @@
+{
+ "format_version": 1,
+ "name": "bootstrap",
+ "vintage": {
+  "number": 1,
+  "date": "2026-08-26"
+ },
+ "digest_algorithm": "hr-pd-1",
+ "digest": "59e9272118dd6dd60ce3e945158bc767e1e71405d131e8848a89cb2945ba5c35",
+ "tasks": [
+  "01-py-pagination",
+  "02-py-config-type",
+  "03-js-slugify",
+  "04-sh-backup",
+  "05-py-dedupe",
+  "06-py-version-sync",
+  "07-py-lru-ttl",
+  "08-py-report-bleed",
+  "09-proxy-concurrency-cap"
+ ]
+}

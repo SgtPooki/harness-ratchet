@@ -1,0 +1,17 @@
+{
+ "task": "04-sh-backup",
+ "oracle": {
+  "unmodified_fails": true,
+  "solution_passes": true,
+  "sabotage_fails": true
+ },
+ "sabotage": "present",
+ "mutants": null,
+ "stability_runs": null,
+ "miner": {
+  "name": "ratchet-audit",
+  "version": "0.1.0"
+ },
+ "minted": "2026-08-26",
+ "source": null
+}

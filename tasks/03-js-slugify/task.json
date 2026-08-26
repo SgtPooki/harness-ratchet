@@ -1,0 +1,17 @@
+{
+ "id": "03-js-slugify",
+ "requires": [
+  "node"
+ ],
+ "surfaces": {
+  "agent": {
+   "encryption": "plaintext"
+  },
+  "scoring": {
+   "encryption": "plaintext"
+  },
+  "admission": {
+   "encryption": "plaintext"
+  }
+ }
+}

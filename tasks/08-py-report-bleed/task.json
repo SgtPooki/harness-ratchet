@@ -1,0 +1,17 @@
+{
+ "id": "08-py-report-bleed",
+ "requires": [
+  "python3"
+ ],
+ "surfaces": {
+  "agent": {
+   "encryption": "plaintext"
+  },
+  "scoring": {
+   "encryption": "plaintext"
+  },
+  "admission": {
+   "encryption": "plaintext"
+  }
+ }
+}

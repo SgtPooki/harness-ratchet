@@ -1,0 +1,18 @@
+{
+ "id": "04-sh-backup",
+ "requires": [
+  "python3",
+  "bash"
+ ],
+ "surfaces": {
+  "agent": {
+   "encryption": "plaintext"
+  },
+  "scoring": {
+   "encryption": "plaintext"
+  },
+  "admission": {
+   "encryption": "plaintext"
+  }
+ }
+}
