@@ -1,0 +1,18 @@
+{
+ "id": "19-py-qualify-columns-core",
+ "requires": [
+  "python3",
+  "uv"
+ ],
+ "surfaces": {
+  "agent": {
+   "encryption": "plaintext"
+  },
+  "scoring": {
+   "encryption": "plaintext"
+  },
+  "admission": {
+   "encryption": "plaintext"
+  }
+ }
+}

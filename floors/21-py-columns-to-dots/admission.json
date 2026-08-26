@@ -1,0 +1,20 @@
+{
+ "task": "21-py-columns-to-dots",
+ "oracle": {
+  "unmodified_fails": true,
+  "solution_passes": true,
+  "sabotage_fails": true
+ },
+ "sabotage": "present",
+ "mutants": {
+  "killed": 3,
+  "total": 3
+ },
+ "stability_runs": 3,
+ "miner": {
+  "name": "ratchet-mint",
+  "version": "0.1.0"
+ },
+ "minted": "2026-08-26",
+ "source": "sqlglot@4303c3f sqlglot/optimizer/qualify_columns.py"
+}

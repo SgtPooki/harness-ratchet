@@ -1,0 +1,18 @@
+{
+ "id": "20-py-xml-elements",
+ "requires": [
+  "python3",
+  "uv"
+ ],
+ "surfaces": {
+  "agent": {
+   "encryption": "plaintext"
+  },
+  "scoring": {
+   "encryption": "plaintext"
+  },
+  "admission": {
+   "encryption": "plaintext"
+  }
+ }
+}

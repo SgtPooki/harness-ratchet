@@ -1,0 +1,18 @@
+{
+ "id": "18-py-positional-column",
+ "requires": [
+  "python3",
+  "uv"
+ ],
+ "surfaces": {
+  "agent": {
+   "encryption": "plaintext"
+  },
+  "scoring": {
+   "encryption": "plaintext"
+  },
+  "admission": {
+   "encryption": "plaintext"
+  }
+ }
+}

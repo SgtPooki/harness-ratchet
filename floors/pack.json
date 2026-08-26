@@ -1,0 +1,16 @@
+{
+ "format_version": 1,
+ "name": "floors",
+ "vintage": {
+  "number": 5,
+  "date": "2026-08-26"
+ },
+ "digest_algorithm": "hr-pd-1",
+ "digest": "787b717c307d1938a97b3f646ecc2ec443999ffaf66b1e2391d52473cd3a2d32",
+ "tasks": [
+  "18-py-positional-column",
+  "19-py-qualify-columns-core",
+  "20-py-xml-elements",
+  "21-py-columns-to-dots"
+ ]
+}
