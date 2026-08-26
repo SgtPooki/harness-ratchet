@@ -1,5 +1,17 @@
 # Results ledger
 
+## Bank created, era moves out, split v3 — 2026-08-26 (build step 3)
+
+The personal bank exists (private repo, consumed via a local pack path;
+docs refer to it as harness-bank). Era state now lives there: split v3 =
+the disclosed split v2 below plus ONE re-minted private held-in task (the
+long-implementation task unwound from this repo on 2026-08-25 for
+privacy; re-mint #1 per the miner-milestone resolution — re-admitted with
+numbers identical to the original mint: oracle triple green, 6/7 mutant
+kills, stable 3/3). This repo's split.json stays as the disclosed v2
+example. All v2-era labels (baseline-v5 and earlier) are incomparable to
+v3-era gates; baseline-v6 (build step 4) opens the v3 era.
+
 ## mut-maxtok-48k — 2026-08-25 — **REJECTED** (cycle 4) — the pawl caught the operator
 
 Mutation: maxTokens 32768→49152, targeting the stopReason=length truncation
