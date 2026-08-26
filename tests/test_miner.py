@@ -190,3 +190,99 @@ def test_mint_verb_rejected_logs_reason(source, tmp_path, capsys):
     assert rows[-1]["failure_reason"] == "vacuous-task"
     assert not (bank / "tasks" / "90-clamp").exists()
     assert not (bank / "tasks" / "pack.json").exists()  # nothing deposited
+
+SUPPORT_MODULE = '''\
+UNIT = 2
+
+def scale(x):
+    return x * UNIT
+'''
+
+SCALED = '''\
+from units import scale
+
+def clamp_scaled(value, lo, hi):
+    """Scale value by the unit factor, then clamp into [lo, hi]."""
+    v = scale(value)
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
+'''
+
+SCALED_TESTS = '''\
+from scaled import clamp_scaled
+
+def test_below():
+    assert clamp_scaled(-5, 0, 10) == 0
+
+def test_above():
+    assert clamp_scaled(15, 0, 10) == 10
+
+def test_inside():
+    assert clamp_scaled(3, 0, 10) == 6
+'''
+
+
+@pytest.fixture()
+def entangled_source(tmp_path):
+    src = tmp_path / "srcrepo2"
+    src.mkdir()
+    (src / "scaled.py").write_text(SCALED)
+    (src / "units.py").write_text(SUPPORT_MODULE)
+    (src / "test_scaled.py").write_text(SCALED_TESTS)
+    return src
+
+
+def entangled_spec(src, **over):
+    kw = dict(name="91-scaled", module=src / "scaled.py",
+              tests=src / "test_scaled.py", function="clamp_scaled",
+              prompt="Implement clamp_scaled per its docstring.",
+              deps=["pytest"], support=[src / "units.py"])
+    kw.update(over)
+    return MintSpec(**kw)
+
+
+def test_mint_support_module_admitted(entangled_source, tmp_path):
+    result = mint(entangled_spec(entangled_source), tmp_path / "bank-tasks")
+    assert result.admitted, result.failure_reason
+    tdir = tmp_path / "bank-tasks" / "91-scaled"
+    # support module lands verbatim in the workspace, the base every overlay sits on
+    assert (tdir / "workspace" / "units.py").read_text() == SUPPORT_MODULE
+    # solution and sabotage stay pure overlays of the target module
+    assert not (tdir / "solution" / "units.py").exists()
+    assert not (tdir / "sabotage" / "units.py").exists()
+    # the support module is never excised or mutated
+    assert "NotImplementedError" not in (tdir / "workspace" / "units.py").read_text()
+
+
+def test_mint_without_support_is_baseline_broken(entangled_source, tmp_path):
+    # sanity: the same target WITHOUT its support module cannot even run its
+    # solution (import error), proving support is load-bearing, not cosmetic
+    result = mint(entangled_spec(entangled_source, support=[]),
+                  tmp_path / "bank-tasks")
+    assert not result.admitted
+
+
+def test_preflight_with_support(entangled_source):
+    assert preflight(entangled_spec(entangled_source)) is None
+
+
+def test_missing_support_module_is_mint_error(entangled_source, tmp_path):
+    from ratchet.miner.excision import MintError
+    spec = entangled_spec(entangled_source,
+                          support=[entangled_source / "absent.py"])
+    with pytest.raises(MintError):
+        mint(spec, tmp_path / "bank-tasks")
+
+
+def test_spec_load_support_field(tmp_path, entangled_source):
+    doc = {"name": "91-scaled", "module": str(entangled_source / "scaled.py"),
+           "tests": str(entangled_source / "test_scaled.py"),
+           "function": "clamp_scaled", "prompt": "p", "deps": ["pytest"],
+           "support": [str(entangled_source / "units.py")]}
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps(doc))
+    spec = MintSpec.load(p)
+    assert spec.support == [entangled_source / "units.py"]

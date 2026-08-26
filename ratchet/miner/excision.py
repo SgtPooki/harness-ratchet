@@ -52,6 +52,10 @@ class MintSpec:
     deps: list[str]
     package: str = ""
     pytest_args: list[str] = field(default_factory=list)
+    # Sibling modules the target module (or its tests) imports, copied
+    # byte-verbatim into the workspace beside the target module. Never
+    # excised, never mutated: they are context, not the task.
+    support: list[Path] = field(default_factory=list)
 
     @classmethod
     def load(cls, path: Path) -> "MintSpec":
@@ -61,7 +65,8 @@ class MintSpec:
                        tests=Path(doc["tests"]), function=doc["function"],
                        prompt=doc["prompt"], deps=list(doc["deps"]),
                        package=doc.get("package", ""),
-                       pytest_args=list(doc.get("pytest_args", [])))
+                       pytest_args=list(doc.get("pytest_args", [])),
+                       support=[Path(p) for p in doc.get("support", [])])
         except KeyError as e:
             raise MintError(f"{path}: spec missing {e}") from e
 
@@ -164,6 +169,7 @@ def preflight(spec: MintSpec, runs: int = 2) -> str | None:
         rel = _module_rel(spec)
         (tmp / "ws" / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp / "ws" / rel).write_text(spec.module.read_text())
+        _write_support(tmp / "ws", spec)
         _write_package_inits(tmp / "ws", spec)
         vdir = tmp / "verify"
         vdir.mkdir()
@@ -180,6 +186,15 @@ def preflight(spec: MintSpec, runs: int = 2) -> str | None:
 def _module_rel(spec: MintSpec) -> Path:
     pkg_parts = spec.package.split(".") if spec.package else []
     return Path(*pkg_parts) / spec.module.name if pkg_parts else Path(spec.module.name)
+
+
+def _write_support(ws: Path, spec: MintSpec) -> None:
+    """Copy support modules verbatim into the module's package directory."""
+    pkg_dir = ws / _module_rel(spec).parent
+    for sup in spec.support:
+        if not sup.is_file():
+            raise MintError(f"mine: support module {sup} not found")
+        (pkg_dir / sup.name).write_text(sup.read_text())
 
 
 def _write_package_inits(ws: Path, spec: MintSpec) -> None:
@@ -219,6 +234,7 @@ def mint(spec: MintSpec, out_dir: Path) -> MintResult:
             (base / d / rel).parent.mkdir(parents=True, exist_ok=True)
             (base / d / rel).write_text(text)
         # package importability lives in the workspace (the base every overlay sits on)
+        _write_support(base / "workspace", spec)
         _write_package_inits(base / "workspace", spec)
         shutil.copy(spec.tests, base / "verify" / spec.tests.name)
         (base / "prompt.md").write_text(spec.prompt.rstrip() + "\n")
