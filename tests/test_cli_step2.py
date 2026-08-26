@@ -84,10 +84,19 @@ def test_sweep_and_set_active(tmp_path, repo, fake_omp_env, monkeypatch, capsys)
                  "--tasks", "01-py-pagination", "--k", "1"]) == 0
     assert len((bank / "runs" / "b1" / "results.jsonl").read_text().splitlines()) == 3
 
+    # sweep cost record (#12 decision 7): totals plus the order actually used
+    cost = json.loads((bank / "runs" / "b1" / "sweep_cost.json").read_text())
+    assert cost["rollouts_run"] == 1 and cost["rollouts_planned"] == 1
+    assert cost["tokens_in"] == 350 and cost["aborted"] is False
+    assert cost["task_order"] == ["01-py-pagination"]
+    assert cost["concurrency"] == 1
+    assert cost["sum_rollout_duration_s"] >= 0 and cost["elapsed_wall_s"] >= 0
+
     assert main(["baseline", "set-active", "b1", "--config", cfgp]) == 0
     reg = json.loads((bank / "era" / "ACTIVE_BASELINE").read_text())
     assert reg["label"] == "b1" and reg["gate_version"] == 4
     assert reg["split_version"] == 0
+    assert reg["concurrency"] == 1  # #12 decision 6: recorded mechanically
     assert reg["model"] == "vllm/homelab-default"
     assert set(reg["config_sha256"]) == {"overlays/eval-isolation.yml",
                                          "overlays/ctxslim-v1.yml"}

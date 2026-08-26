@@ -211,7 +211,7 @@ def _select_tasks(pack_root: Path, selector: list[str], split_file: Path) -> lis
 
 
 def cmd_baseline_sweep(args) -> int:
-    from ratchet.runner.base import RolloutSpec
+    from ratchet.runner.base import RolloutSpec, sweep_cost
     from ratchet.runner.omp import OmpRunner
 
     cfg = _load_cfg(args)
@@ -223,6 +223,8 @@ def cmd_baseline_sweep(args) -> int:
     run_root = cfg.runs_dir / args.label
     run_root.mkdir(parents=True, exist_ok=True)
     runner = OmpRunner()
+    t0 = time.monotonic()
+    rows = []
     for task_id in tasks:
         for i in range(1, k + 1):
             row = runner.run_rollout(RolloutSpec(
@@ -233,8 +235,13 @@ def cmd_baseline_sweep(args) -> int:
                 extra_config=Path(args.extra_config) if args.extra_config else None,
                 extra_sys=args.extra_sys,
             ))
+            rows.append(row)
             print(f"[{task_id} r{i}] pass={str(row.passed).lower()} "
                   f"rc={row.agent_rc} {row.duration_s}s")
+    cost = sweep_cost(rows, elapsed_wall_s=int(time.monotonic() - t0),
+                      rollouts_planned=len(tasks) * k, aborted=False,
+                      task_order=list(tasks))
+    (run_root / "sweep_cost.json").write_text(json.dumps(cost, indent=1) + "\n")
     print(f"results: {run_root / 'results.jsonl'}")
     return 0
 
@@ -251,9 +258,11 @@ def cmd_baseline_set_active(args) -> int:
         configs = [str(p.relative_to(cfg.root)) for p in cfg.standing_overlays]
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cfg.root,
                             capture_output=True, text=True).stdout.strip()
+    from ratchet.runner.base import CONCURRENCY
     reg = build_registry(label=args.label, results=results, split=split,
                          configs=configs, config_root=cfg.root,
-                         set_at_commit=commit, ts=int(time.time()))
+                         set_at_commit=commit, ts=int(time.time()),
+                         concurrency=CONCURRENCY)
     cfg.era_dir.mkdir(parents=True, exist_ok=True)
     cfg.active_baseline.write_text(json.dumps(reg, indent=1) + "\n")
     print(f"active baseline -> {args.label} (split v{split['split_version']}, "

@@ -37,7 +37,7 @@ def load_registry(path: Path) -> dict:
 
 def build_registry(*, label: str, results: dict[str, list[dict]], split: dict,
                    configs: list[str], config_root: Path, set_at_commit: str,
-                   ts: int) -> dict:
+                   ts: int, concurrency: int = 1) -> dict:
     """Assemble a registry record for --set-active. Raises EraError on bad input."""
     models = sorted({r["model"] for rs in results.values() for r in rs})
     if len(models) != 1:
@@ -52,7 +52,7 @@ def build_registry(*, label: str, results: dict[str, list[dict]], split: dict,
         "label": label, "split_version": split["split_version"],
         "gate_version": GATE_VERSION, "model": models[0],
         "config_sha256": cfg_hashes, "set_at_commit": set_at_commit,
-        "ts": ts,
+        "ts": ts, "concurrency": concurrency,
     }
 
 

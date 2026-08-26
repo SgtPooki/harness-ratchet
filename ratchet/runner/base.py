@@ -55,3 +55,31 @@ class TelemetryRow:
 
 class Runner(Protocol):
     def run_rollout(self, spec: RolloutSpec) -> TelemetryRow: ...
+
+
+# The v1 runner is serial (#12 decision 6): one rollout in flight. Recorded
+# in baseline records, sweep_cost, and manifests; comparisons refuse
+# mismatched values before the gate ever runs.
+CONCURRENCY = 1
+
+
+def sweep_cost(rows: list[TelemetryRow], *, elapsed_wall_s: int,
+               rollouts_planned: int, aborted: bool,
+               task_order: list[str]) -> dict:
+    """The #12 decision 7 record: what one sweep actually cost.
+
+    elapsed_wall_s and the summed rollout durations are recorded
+    separately so serial and future parallel runs stay priceable and
+    comparable.
+    """
+    return {
+        "elapsed_wall_s": elapsed_wall_s,
+        "sum_rollout_duration_s": sum(r.duration_s for r in rows),
+        "tokens_in": sum(r.tokens_in for r in rows),
+        "tokens_out": sum(r.tokens_out for r in rows),
+        "rollouts_run": len(rows),
+        "rollouts_planned": rollouts_planned,
+        "aborted": aborted,
+        "task_order": task_order,
+        "concurrency": CONCURRENCY,
+    }
