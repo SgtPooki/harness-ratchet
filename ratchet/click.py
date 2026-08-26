@@ -109,6 +109,80 @@ def _pass_rate(rows: list[dict]) -> float:
     return sum(1 for r in rows if r["pass"]) / len(rows)
 
 
+@dataclass
+class SweepResult:
+    """Everything one #12-flow candidate sweep produced and decided."""
+    screening_k: int
+    final_k: int
+    escalated: bool
+    screening_verdict: str | None
+    aborted: bool
+    abort_condition: str | None
+    promote_so_far: bool          # held-in + held-out gate said PROMOTE
+    rows: list                    # TelemetryRow, in execution order
+    task_order: list[str]
+    elapsed_wall_s: int
+
+
+def run_sweep(split: dict, base: dict[str, list[dict]], rollout, *,
+              screening_k: int, baseline_label: str, candidate: str,
+              min_k: int, effect: float) -> SweepResult:
+    """The #12 sweep flow: screen at screening_k over held-in then held-out
+    (cheapest first), abort on certainty, escalate to FULL_K only on a
+    screening PROMOTE, and run sentinels only once the gate over held-in
+    plus held-out says PROMOTE. `rollout(task_id, i)` runs one rollout and
+    returns its TelemetryRow; gate math itself is untouched."""
+    order = sweep_order(split, base)
+    res = SweepResult(screening_k=screening_k, final_k=screening_k,
+                      escalated=False, screening_verdict=None, aborted=False,
+                      abort_condition=None, promote_so_far=False, rows=[],
+                      task_order=[], elapsed_wall_s=0)
+    cand: dict[str, list[dict]] = {}
+    t0 = time.monotonic()
+
+    def record(task_id: str, i: int) -> None:
+        row = rollout(task_id, i)
+        res.rows.append(row)
+        cand.setdefault(task_id, []).append(row.to_json())
+        if task_id not in res.task_order:
+            res.task_order.append(task_id)
+
+    def stage(planned_k: int, start_i: int) -> None:
+        for task_id in order:
+            for i in range(start_i + 1, planned_k + 1):
+                record(task_id, i)
+                reason = reject_certain(split, base, cand, planned_k)
+                if reason:
+                    res.aborted, res.abort_condition = True, reason
+                    print(f"abort: {reason} (remaining rollouts skipped; "
+                          "incomplete coverage is already a REJECT)")
+                    return
+
+    def gated_verdict() -> str:
+        manifest, _ = decide(split, base, cand, baseline_label=baseline_label,
+                             candidate_label=candidate, min_k=min_k,
+                             effect=effect)
+        return manifest["decision"]
+
+    stage(screening_k, 0)
+    if not res.aborted:
+        res.screening_verdict = gated_verdict()
+        # #12 decision 4: only a screening PROMOTE earns the appended pair
+        if res.screening_verdict == "PROMOTE" and screening_k < FULL_K:
+            res.escalated, res.final_k = True, FULL_K
+            stage(FULL_K, screening_k)
+        res.promote_so_far = not res.aborted and (
+            res.screening_verdict if not res.escalated else gated_verdict()
+        ) == "PROMOTE"
+    # #12 decision 1: sentinels only on the promotion path
+    if res.promote_so_far:
+        for task_id in split["sentinel"]:
+            for i in range(1, res.final_k + 1):
+                record(task_id, i)
+    res.elapsed_wall_s = int(time.monotonic() - t0)
+    return res
+
+
 def sweep_order(split: dict, base: dict[str, list[dict]]) -> list[str]:
     """#12 decision 3: held-in first, then held-out, cheapest first within
     each role (ascending baseline duration_p50; tasks without baseline rows
@@ -163,45 +237,17 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
               "available and this candidate can only win on soft axes")
 
     surface_op, extra_config, extra_sys = build_op(cfg, runner, op)
-    screening_k = k or SCREENING_K
-    final_k = screening_k
-    escalated = False
-    screening_verdict = None
-    order = sweep_order(split, base)
-    task_order: list[str] = []
-    rows_done: list = []
-    cand_partial: dict[str, list[dict]] = {}
-    aborted = False
-    abort_condition = None
-    t0 = time.monotonic()
 
-    def rollout(task_id: str, i: int) -> None:
+    def rollout(task_id: str, i: int):
         row = runner.run_rollout(RolloutSpec(
             task_dir=resolve_task_dir(cfg, task_id), task_id=task_id,
             rollout=i, label=candidate, run_root=run_root, model=cfg.model,
             timeout_s=cfg.timeout_s,
             standing_overlays=cfg.standing_overlays,
             extra_config=extra_config, extra_sys=extra_sys))
-        rows_done.append(row)
-        cand_partial.setdefault(task_id, []).append(row.to_json())
-        if task_id not in task_order:
-            task_order.append(task_id)
         print(f"[{task_id} r{i}] pass={str(row.passed).lower()} "
               f"rc={row.agent_rc} {row.duration_s}s")
-
-    def stage(planned_k: int, start_i: int) -> None:
-        """Run rollouts start_i+1..planned_k over the ordered gated tasks,
-        checking the #12 decision 2 certainty conditions after each one."""
-        nonlocal aborted, abort_condition
-        for task_id in order:
-            for i in range(start_i + 1, planned_k + 1):
-                rollout(task_id, i)
-                reason = reject_certain(split, base, cand_partial, planned_k)
-                if reason:
-                    aborted, abort_condition = True, reason
-                    print(f"abort: {reason} (remaining rollouts skipped; "
-                          "incomplete coverage is already a REJECT)")
-                    return
+        return row
 
     apply_record = None
     try:
@@ -214,32 +260,9 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
                     "state (prior value "
                     f"{apply_record.prior_value!r}); both arms would be "
                     "identical — nothing to test")
-
-        stage(screening_k, 0)
-        if not aborted:
-            verdict, _ = decide(split, base, cand_partial,
-                                baseline_label=baseline_label,
-                                candidate_label=candidate, min_k=min_k,
-                                effect=effect)
-            screening_verdict = verdict["decision"]
-            # #12 decision 4: only a screening PROMOTE earns the appended pair
-            if screening_verdict == "PROMOTE" and screening_k < FULL_K:
-                escalated, final_k = True, FULL_K
-                stage(FULL_K, screening_k)
-
-        # #12 decision 1: sentinels only after the gate over held-in +
-        # held-out says PROMOTE; every reject skips them
-        promote_so_far = False
-        if not aborted:
-            verdict, _ = decide(split, base, cand_partial,
-                                baseline_label=baseline_label,
-                                candidate_label=candidate, min_k=min_k,
-                                effect=effect)
-            promote_so_far = verdict["decision"] == "PROMOTE"
-        if promote_so_far:
-            for task_id in split["sentinel"]:
-                for i in range(1, final_k + 1):
-                    rollout(task_id, i)
+        sweep = run_sweep(split, base, rollout, screening_k=k or SCREENING_K,
+                          baseline_label=baseline_label, candidate=candidate,
+                          min_k=min_k, effect=effect)
     finally:
         if surface_op is not None:
             surface_op.restore()
@@ -253,7 +276,7 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
             "vacuous": apply_record.vacuous,
             "prior_value": apply_record.prior_value,
         },
-        "k": final_k, "min_k": min_k, "effect_threshold": effect,
+        "k": sweep.final_k, "min_k": min_k, "effect_threshold": effect,
     }
     (run_root / "op.json").write_text(json.dumps(op_record, indent=1) + "\n")
 
@@ -263,21 +286,23 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
     manifest, code = decide(split, base, cand, baseline_label=baseline_label,
                             candidate_label=candidate, min_k=min_k,
                             effect=effect, rollback_target=rollback_target)
-    if not promote_so_far:
-        reason = abort_condition if aborted else "rejected before sentinels"
+    if not sweep.promote_so_far:
+        reason = sweep.abort_condition if sweep.aborted \
+            else "rejected before sentinels"
         manifest["sentinel_advisory"] = {"skipped": reason}
+    gated_n = len(split["held_in"]) + len(split["held_out"])
+    sentinel_n = len(split["sentinel"]) if sweep.promote_so_far else 0
     manifest.update({
-        "screening_k": screening_k, "final_k": final_k, "escalated": escalated,
-        "screening_verdict": screening_verdict,
-        "aborted_at": len(rows_done) if aborted else None,
-        "abort_condition": abort_condition,
+        "screening_k": sweep.screening_k, "final_k": sweep.final_k,
+        "escalated": sweep.escalated,
+        "screening_verdict": sweep.screening_verdict,
+        "aborted_at": len(sweep.rows) if sweep.aborted else None,
+        "abort_condition": sweep.abort_condition,
         "concurrency": CONCURRENCY,
         "sweep_cost": sweep_cost(
-            rows_done, elapsed_wall_s=int(time.monotonic() - t0),
-            rollouts_planned=(len(order) * final_k
-                              + (len(split["sentinel"]) * final_k
-                                 if promote_so_far else 0)),
-            aborted=aborted, task_order=task_order),
+            sweep.rows, elapsed_wall_s=sweep.elapsed_wall_s,
+            rollouts_planned=(gated_n + sentinel_n) * sweep.final_k,
+            aborted=sweep.aborted, task_order=sweep.task_order),
     })
     write_manifest(run_root / "manifest.json", manifest)
     return manifest, code
