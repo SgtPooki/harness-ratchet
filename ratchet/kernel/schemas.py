@@ -3,8 +3,6 @@
 import json
 from importlib import resources
 
-import jsonschema
-
 _SCHEMA_NAMES = ("pack", "task", "admission")
 
 
@@ -17,6 +15,8 @@ def load_schema(name: str) -> dict:
 
 def validation_errors(name: str, instance) -> list[str]:
     """Validate instance against the named schema; returns human-readable errors."""
+    import jsonschema  # deferred so the kernel imports with stdlib only
+
     validator = jsonschema.Draft202012Validator(load_schema(name))
     return [
         f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}"
