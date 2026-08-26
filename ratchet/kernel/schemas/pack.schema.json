@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SgtPooki/harness-ratchet/pack.schema.json",
+  "title": "Pack manifest (pack format v1, issue #3)",
+  "type": "object",
+  "required": ["format_version", "name", "vintage", "digest_algorithm", "digest", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "vintage": {
+      "type": "object",
+      "required": ["number", "date"],
+      "additionalProperties": false,
+      "properties": {
+        "number": {"type": "integer", "minimum": 1},
+        "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+      }
+    },
+    "digest_algorithm": {"const": "hr-pd-1"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tasks": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  }
+}
