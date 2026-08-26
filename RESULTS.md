@@ -1,5 +1,34 @@
 # Results ledger
 
+## baseline-v7 — 2026-08-26 — split v4 era floor, headroom restored
+
+37/44 at k=4 over the nine bootstrap tasks plus private held-in tasks 10
+and 16, recorded the same day the eval-cost resolution (#12) locked and
+its implementation landed. Split v4 = v3 plus the deliberately hard
+held-in task 16, minted from private production code precisely because
+held-in had been 4/4 everywhere since baseline-v6 and the gate could not
+reward pass gains. It worked: task 16 is 0/4, all four failures the
+claimed-done mode (agent exits 0 with a partial implementation; 9-15 of
+24 verifier tests fail), so pass-improving mutations are rewardable
+again. 03 is 3/4 (its known unicode edge-case mode, agent exit 0, not
+truncation). 09 recovered to 4/4.
+
+Sentinel advisory, the loudest yet: 04 dropped to 2/4 with two 900s
+rc-124 timeouts and p50 808s, against a same-morning v6 record of 4/4 at
+226s p50 under byte-identical standing overlays. Stream forensics on the
+first timeout show 61 turns, 60 tool executions, and 4 auto-compactions
+with the agent still reasoning at the kill: an agent spiral with
+compaction thrash, not machine contention (neighboring tasks sat exactly
+on their v6 envelopes; no competing model load). 07 stayed clean at 4/4
+in envelope. As sentinel evidence this is lawful mining material
+(invariant 7): the compaction-thrash failure mode is a candidate
+mutation target. Baselines record reality; the floor stands.
+
+Sweep cost 6061s wall / 22.9M tokens_in at full k=4 with sentinels, the
+price new baselines deliberately keep paying under #12; candidate
+sweeps from here run the cheap flow (k=2 screening, early abort,
+sentinels only on the promotion path).
+
 ## mut-maxtok-49k — 2026-08-26 — **REJECTED** (cycle 5, the lawful re-test)
 
 maxTokens 32768->49152 through `ratchet click` (model-param op, fail-closed
