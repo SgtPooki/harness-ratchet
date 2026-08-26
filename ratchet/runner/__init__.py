@@ -1,5 +1,10 @@
 """Harness invocation: the runner interface and the omp reference adapter.
 
-Arrives in build step 2 of the runner-rewrite build order (issue #2,
-point 9). The kernel never imports this package (CI-linted).
+The kernel never imports this package (CI-linted). The interface is an
+internal boundary, not a multi-harness adapter layer: omp stays the only
+runner until a second harness is actually in use (VISION: The artifacts).
+
+Modules: base (RolloutSpec, TelemetryRow, Runner protocol), omp (the
+reference adapter, ported from bin/run.sh), ops (the three surface
+operations from the finding format), probe (channel liveness).
 """

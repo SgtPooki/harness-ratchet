@@ -62,6 +62,24 @@ def run_verifier(task_dir: Path, workspace: Path) -> bool:
     return r.returncode == 0
 
 
+def run_verifier_capture(task_dir: Path, workspace: Path) -> str:
+    """Run the verifier and return its combined output (bin/run.sh semantics:
+    stdout+stderr merged; an absent verifier yields empty output)."""
+    cmd = _verifier(task_dir)
+    if cmd is None:
+        return ""
+    r = subprocess.run(cmd[0] + [str(workspace)], stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, timeout=VERIFY_TIMEOUT_S)
+    return r.stdout.decode(errors="replace")
+
+
+def composite_pass(verify_output: str, agent_rc: int) -> bool:
+    """Composite pass: verifier prints a bare PASS line AND the agent exited 0
+    (a timeout that happens to leave a passing tree is not a pass — the mutB
+    lesson, ported from bin/run.sh)."""
+    return agent_rc == 0 and any(line == "PASS" for line in verify_output.splitlines())
+
+
 def admit_task(task_dir: Path) -> AdmissionResult:
     """Run the oracle triple over one task directory."""
     task_dir = Path(task_dir)
