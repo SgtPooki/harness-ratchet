@@ -1,5 +1,31 @@
 # Results ledger
 
+## mut-contract-lean-k4 — 2026-08-27 — **REJECTED** at claim grade; the first finding
+
+The lean contract rule re-proposed at k=4 under the locked re-proposal
+path, aimed at making the cycle-7 verdict claim-grade. It did more than
+that: the k=2 screenings' held-in pass gain (03 at 2/2 twice) vanished
+at k=4, exposed as 2-sample luck, exactly the false positive the
+escalation rule exists to catch. The k=4 truth is pure cost: held-in
+duration_p50 +18 percent, held-out duration_p50 +37 percent, held-out
+tokens_out_p50 +17 percent, no improvement on any axis, and the target
+task untouched (16 at 0/4 under the rule, matching baseline). Sweep:
+3919s, 15.3M tokens_in, 36 rollouts, sentinels skipped on the reject.
+
+Exported as the project's first finding: negative-result
+contract-discipline-rules-9b3bae4c797f (hr-fd-1
+9b3bae4c797f3358bed2412270bbdbe9b15adb83ef61132e11ff152122fa2979).
+The claim: prose contract-discipline rules in RULES.md tax duration and
+tokens across the board on a qwen3.8-27b omp stack and do not fix the
+claimed-done failure mode. Registry seeding follows once private-pack
+task ids are anonymized in the finding's split block (amendment
+pending; the #7 replication amendment already establishes the
+principle).
+
+Three-cycle arc closed for this rule class: k=2 priced it twice, k=4
+convicted it and revealed the screening gains as noise. The loop
+worked exactly as designed at every stage.
+
 ## mut-contract-lean — 2026-08-27 — **REJECTED** (cycle 7 closes the rule class)
 
 The leaner phrasing of cycle 6's contract discipline (verify against the
