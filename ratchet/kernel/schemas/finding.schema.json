@@ -49,7 +49,7 @@
     "claim": {
       "type": "object",
       "required": ["kit_commit", "decision", "improved_axes", "gate", "k",
-                   "baseline_label", "candidate_label", "pack", "split",
+                   "baseline_label", "candidate_label", "packs", "split",
                    "baseline_harness", "channel_liveness", "model_fingerprint",
                    "runtime_envelope", "sweep_cost"],
       "additionalProperties": false,
@@ -71,21 +71,26 @@
               "description": "final k; screening sweeps are not claim-grade (#12 decision 4)"},
         "baseline_label": {"type": "string"},
         "candidate_label": {"type": "string"},
-        "pack": {
-          "type": "object",
-          "required": ["name", "digest", "vintage"],
-          "additionalProperties": false,
-          "properties": {
-            "name": {"type": "string"},
-            "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "vintage": {
-              "type": "object",
-              "required": ["number", "date"],
-              "additionalProperties": false,
-              "properties": {"number": {"type": "integer"},
-                             "date": {"type": "string", "format": "date"}}
-            },
-            "url": {"type": "string"}
+        "packs": {
+          "description": "one reference per pack contributing tasks to the split (#5 amendment 2026-08-26); a claim touching any private pack is transfer-lane only",
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "digest", "vintage", "private"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string"},
+              "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "vintage": {
+                "type": "object",
+                "required": ["number", "date"],
+                "additionalProperties": false,
+                "properties": {"number": {"type": "integer"},
+                               "date": {"type": "string", "format": "date"}}
+              },
+              "private": {"type": "boolean"},
+              "url": {"type": "string"}
+            }
           }
         },
         "split": {

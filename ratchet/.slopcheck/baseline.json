@@ -2,7 +2,7 @@
   "version": 2,
   "files_analyzed": 19,
   "function_count": 127,
-  "erosion": 0.4787,
+  "erosion": 0.4808,
   "duplication": 0.0178,
   "duplicated_lines": 43,
   "total_code_lines": 2422,

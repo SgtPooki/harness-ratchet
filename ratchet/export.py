@@ -4,9 +4,9 @@ issue #2 point 4: the export verb).
 Export is deliberately fussy: everything it refuses is a locked rule.
   - append-system-prompt candidates are registry-inadmissible (#5 amendment 3).
   - screening sweeps (final k below 4) are not claim-grade (#12 decision 4).
-  - a split spanning more than one pack cannot be expressed in format v1,
-    which pins ONE pack digest and vintage; export refuses rather than
-    inventing an unratified extension (surface the amendment instead).
+  - a split may span packs (the #5 amendment 2026-08-26): the claim lists
+    one reference per pack, the bank marked private, and any claim
+    touching a private pack is transfer-lane only.
   - the model fingerprint and engine envelope come from operator-maintained
     era files (fail closed with instructions), because weights live wherever
     the engine runs and hr-mf-1 must be computed there.
@@ -55,31 +55,30 @@ def _operator_file(era_dir: Path, name: str, purpose: str) -> dict:
     return json.loads(p.read_text())
 
 
-def _pack_of(cfg: RatchetConfig, task_ids: list[str]) -> dict:
-    """Resolve the ONE pack every gated task lives in, or refuse."""
+def _packs_of(cfg: RatchetConfig, task_ids: list[str]) -> list[dict]:
+    """Resolve every pack contributing tasks to the split (#5 amendment
+    2026-08-26): one reference per pack, the bank marked private (its bytes
+    never leave the operator's machine, so digest and vintage are all a
+    claim reveals, and any claim touching it is transfer-lane only)."""
     packs = []
     for root in (cfg.bank_pack, cfg.bootstrap_pack):
         mpath = Path(root) / "pack.json"
         if mpath.is_file():
             packs.append((Path(root), json.loads(mpath.read_text())))
-    homes = {}
+    used: dict[str, tuple[Path, dict]] = {}
     for t in task_ids:
         for root, manifest in packs:
             if t in manifest.get("tasks", []) or (root / t).is_dir():
-                homes.setdefault(t, (root, manifest))
+                used[str(root)] = (root, manifest)
                 break
-        if t not in homes:
+        else:
             raise ExportError(f"export: task {t} not found in any configured pack")
-    roots = {str(root) for root, _ in homes.values()}
-    if len(roots) != 1:
-        raise ExportError(
-            "export: the split's gated tasks span more than one pack "
-            f"({sorted(roots)}); finding format v1 pins ONE pack digest and "
-            "vintage (#5 point on claims), so this claim cannot be expressed "
-            "without a format amendment. Surface it rather than fudge it.")
-    _, manifest = next(iter(homes.values()))
-    return {"name": manifest["name"], "digest": manifest["digest"],
-            "vintage": manifest["vintage"]}
+    refs = []
+    for root, manifest in used.values():
+        refs.append({"name": manifest["name"], "digest": manifest["digest"],
+                     "vintage": manifest["vintage"],
+                     "private": root == Path(cfg.bank_pack)})
+    return sorted(refs, key=lambda r: r["name"])
 
 
 def _channel_liveness(cfg: RatchetConfig, op_kind: str) -> dict:
@@ -142,7 +141,8 @@ def _load_claim_grade_run(cfg: RatchetConfig, candidate: str,
 
 
 def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
-                 split: dict, pack: dict, op_kind: str, final_k: int) -> dict:
+                 split: dict, packs: list[dict], op_kind: str,
+                 final_k: int) -> dict:
     fingerprint = _operator_file(cfg.era_dir, "model-fingerprint.json",
                                  "the hr-mf-1 block (compute weights_digest "
                                  "where the weights live)")
@@ -161,7 +161,7 @@ def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
         "k": final_k,
         "baseline_label": manifest["baseline"],
         "candidate_label": manifest["candidate"],
-        "pack": pack,
+        "packs": packs,
         "split": {"algorithm": "hr-sd-1",
                   "digest": split_digest(split["split_version"],
                                          split["held_in"], split["held_out"],
@@ -210,11 +210,11 @@ def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
         raise ExportError("export: split.json version differs from the "
                           "manifest's; the era moved on")
     all_tasks = split["held_in"] + split["held_out"] + split["sentinel"]
-    pack = _pack_of(cfg, all_tasks)
+    packs = _packs_of(cfg, all_tasks)
 
     op = {"kind": op_rec["op"]["kind"],
           "payload": {k: v for k, v in op_rec["op"].items() if k != "kind"}}
-    engine, claim = _claim_block(cfg, manifest, registry, split, pack,
+    engine, claim = _claim_block(cfg, manifest, registry, split, packs,
                                  op["kind"], final_k)
     doc = {
         "format_version": 1,

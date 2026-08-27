@@ -103,6 +103,8 @@ def test_export_happy_path(cfg, capsys):
     # fully schema-valid including the digest
     assert validation_errors("finding", doc) == []
     assert doc["claim"]["k"] == 4 and doc["claim"]["decision"] == "PROMOTE"
+    assert doc["claim"]["packs"] == [{"name": "bank", "digest": "0" * 64,
+        "vintage": {"number": 1, "date": "2026-08-26"}, "private": True}]
     assert doc["claim"]["channel_liveness"]["not_required"]
     # evidence rows: verify_tail capped to the last line and home redacted
     rows = [json.loads(l) for l in
@@ -122,7 +124,9 @@ def test_export_refuses_screening_k(cfg):
         do_export(cfg)
 
 
-def test_export_refuses_mixed_packs(cfg, tmp_path):
+def test_export_mixed_packs_lists_both_with_private_flags(cfg, tmp_path):
+    # the #5 amendment (2026-08-26): one reference per contributing pack,
+    # the bank marked private
     other = tmp_path / "otherpack"
     (other / "t-b").mkdir(parents=True)
     (other / "pack.json").write_text(json.dumps(
@@ -135,8 +139,12 @@ def test_export_refuses_mixed_packs(cfg, tmp_path):
     d["tasks"] = ["t-a", "t-s"]
     pj.write_text(json.dumps(d))
     cfg.bootstrap_pack = other
-    with pytest.raises(ExportError, match="more than one pack"):
-        do_export(cfg)
+    out = do_export(cfg)
+    doc = json.loads((out / "finding.json").read_text())
+    packs = doc["claim"]["packs"]
+    assert [p["name"] for p in packs] == ["bank", "floors"]
+    assert [p["private"] for p in packs] == [True, False]
+    assert validation_errors("finding", doc) == []
 
 
 def test_export_refuses_inadmissible_channel(cfg):
