@@ -3,7 +3,7 @@
 import json
 from importlib import resources
 
-_SCHEMA_NAMES = ("pack", "task", "admission", "finding")
+_SCHEMA_NAMES = ("pack", "task", "admission", "finding", "replication")
 
 
 def load_schema(name: str) -> dict:

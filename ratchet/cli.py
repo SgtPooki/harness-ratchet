@@ -1,8 +1,9 @@
 """The `ratchet` console command: eight verbs (issue #2, point 4).
 
-Implemented: audit (step 1), init, baseline sweep / set-active, probe
-(step 2), click (step 5), mint (step 6), export (step 7). Still deferred:
-replicate — it exits 2 with a pointer to its build-order step.
+All eight verbs are implemented: audit (step 1), init, baseline sweep /
+set-active, probe (step 2), click (step 5), mint (step 6), export and
+replicate (step 7). The exact replication lane runs its stage-A pin
+checks; its both-arm re-run waits for registry-hosted packs.
 """
 
 import argparse
@@ -24,8 +25,6 @@ from ratchet.kernel.gate import GateDataError
 from ratchet.kernel.oracle import admit_task
 from ratchet.kernel.pack import PackError, materialize_bootstrap, validate_pack
 from ratchet.runner.ops import OpError
-
-_DEFERRED = {"replicate": 7}
 
 SPLIT_TEMPLATE = {
     "_comment": ("Pinned task split for this bank's era. Roles: held_in "
@@ -485,13 +484,66 @@ def cmd_export(args) -> int:
     return 0
 
 
-def _deferred(verb: str):
-    def run(_args) -> int:
-        print(f"ratchet {verb}: not implemented yet — arrives in build step "
-              f"{_DEFERRED[verb]} of the runner-rewrite build order (issue #2)",
-              file=sys.stderr)
+def cmd_replicate(args) -> int:
+    from ratchet.export import ExportError, _operator_file
+    from ratchet.replicate import (ReplicateError, determine_lane,
+                                   load_finding, replicate_transfer,
+                                   stage_a_exact, write_mismatch)
+
+    cfg = _load_cfg(args)
+    try:
+        finding = load_finding(Path(args.finding))
+        fp = _operator_file(cfg.era_dir, "model-fingerprint.json",
+                            "the replicator hr-mf-1 block")
+        env = _operator_file(cfg.era_dir, "engine-envelope.json",
+                             "the replicator engine envelope"
+                             ).get("runtime_envelope", {})
+    except (ReplicateError, ExportError) as e:
+        print(str(e), file=sys.stderr)
         return 2
-    return run
+
+    out_root = cfg.root / "replications"
+    lane, lane_reasons = determine_lane(finding, fp, env)
+    if args.lane == "transfer":
+        lane = "local-transfer"
+    elif args.lane == "exact" and lane != "exact":
+        print("replicate: exact lane unavailable:\n  - "
+              + "\n  - ".join(lane_reasons), file=sys.stderr)
+        return 2
+
+    try:
+        if lane == "exact":
+            reasons = stage_a_exact(finding, cfg)
+            if reasons:
+                path = write_mismatch(cfg, finding, submitter=args.submitter,
+                                      out_root=out_root, reasons=reasons)
+                print(f"outcome: environment-mismatch ({len(reasons)} "
+                      "stage-A pin failures; recorded, never tallied)")
+                print(f"manifest: {path}")
+                _print_broadcast(args, "environment-mismatch")
+                return 0
+            print("replicate: exact-lane both-arm re-run is not implemented "
+                  "yet; re-run with --lane transfer", file=sys.stderr)
+            return 2
+        path, outcome = replicate_transfer(cfg, finding,
+                                           submitter=args.submitter,
+                                           out_root=out_root, k=args.k)
+    except ReplicateError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    print(f"outcome: {outcome} (local-transfer lane)")
+    print(f"manifest: {path}")
+    _print_broadcast(args, outcome)
+    return 0
+
+
+def _print_broadcast(args, outcome: str) -> None:
+    # #7 point 5: replicated, refuted, and environment-mismatch broadcast
+    # by default; vacuous never; opt-out per invocation only
+    if outcome == "vacuous" or args.no_submit:
+        return
+    print("submit: open a PR adding this directory under the finding's "
+          "replications/ in the registry repo (#6 layout)")
 
 
 def main(argv=None) -> int:
@@ -608,9 +660,21 @@ def main(argv=None) -> int:
     p_export.add_argument("--config", default=None, help="ratchet.toml path")
     p_export.set_defaults(fn=cmd_export)
 
-    p = sub.add_parser("replicate",
-                       help=f"(build step {_DEFERRED['replicate']}; not yet implemented)")
-    p.set_defaults(fn=_deferred("replicate"))
+    p_repl = sub.add_parser("replicate",
+                            help="re-test a published finding (transfer "
+                                 "lane; exact stage-A checks)")
+    p_repl.add_argument("finding", help="finding directory to replicate")
+    p_repl.add_argument("--submitter", required=True,
+                        help="replicator identity, e.g. github:SgtPooki")
+    p_repl.add_argument("--k", type=int, default=None,
+                        help="rollouts per task (default: the claim's k)")
+    p_repl.add_argument("--lane", choices=["auto", "transfer", "exact"],
+                        default="auto")
+    p_repl.add_argument("--no-submit", action="store_true",
+                        help="write the manifest locally without the "
+                             "broadcast instructions")
+    p_repl.add_argument("--config", default=None, help="ratchet.toml path")
+    p_repl.set_defaults(fn=cmd_replicate)
 
     args = ap.parse_args(argv)
     try:

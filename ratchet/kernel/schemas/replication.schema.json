@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SgtPooki/harness-ratchet/replication.schema.json",
+  "title": "Replication manifest v1 (issue #7, amended 2026-08-25)",
+  "type": "object",
+  "required": ["format_version", "digest", "target_finding", "lane", "outcome",
+               "reasons", "created", "submitter_identity", "replicator",
+               "gate", "k", "op_application"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {"const": 1},
+    "digest": {
+      "description": "hr-fd-1 mechanics over the replication directory, this file included with digest null",
+      "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"
+    },
+    "target_finding": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "lane": {"enum": ["exact", "local-transfer"]},
+    "outcome": {"enum": ["replicated", "refuted", "vacuous",
+                          "environment-mismatch"]},
+    "reasons": {"type": "array", "items": {"type": "string"}},
+    "created": {"type": "string", "format": "date"},
+    "submitter_identity": {"type": "string", "pattern": "^[a-z][a-z0-9]*:.+$"},
+    "replicator": {
+      "type": "object",
+      "required": ["model_fingerprint", "runtime_envelope"],
+      "additionalProperties": false,
+      "properties": {
+        "model_fingerprint": {"type": "object"},
+        "runtime_envelope": {"type": "object"}
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": ["gate_version", "min_k", "effect_threshold"],
+      "additionalProperties": false,
+      "properties": {
+        "gate_version": {"type": "integer"},
+        "min_k": {"type": "integer"},
+        "effect_threshold": {"type": "number"}
+      }
+    },
+    "k": {"type": "integer", "minimum": 2},
+    "op_application": {
+      "type": "object",
+      "required": ["vacuous"],
+      "additionalProperties": false,
+      "properties": {
+        "vacuous": {"type": "boolean"},
+        "prior_value": {}
+      }
+    },
+    "calibration": {
+      "description": "exact lane stage B: d = sum over gated tasks of |claim pass rate - replicator pass rate|; d >= 1.0 is an environment mismatch",
+      "type": "object",
+      "required": ["d"],
+      "additionalProperties": false,
+      "properties": {"d": {"type": "number"}}
+    },
+    "task_anonymization": {
+      "description": "local-transfer against a private bank: stable anonymous ids (t1, t2, ...) plus difficulty band per the #7 amendment",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["band"],
+        "additionalProperties": false,
+        "properties": {"band": {"enum": ["passing", "headroom"]}}
+      }
+    }
+  }
+}

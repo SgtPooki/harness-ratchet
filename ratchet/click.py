@@ -40,10 +40,10 @@ from ratchet.kernel.gate import (GateDataError, decide, load_results,
                                  reject_certain, write_manifest)
 from ratchet.runner.base import CONCURRENCY, RolloutSpec, sweep_cost
 from ratchet.runner.omp import OmpRunner
+from ratchet.runner.ops import ConfigOverlayOp, ModelParamOp, OpError, RulesAppendOp
 
 SCREENING_K = 2   # #12 decision 4: click sweeps screen at k=2 by default
 FULL_K = 4        # escalation target; only a k=4 PROMOTE promotes
-from ratchet.runner.ops import ConfigOverlayOp, ModelParamOp, OpError, RulesAppendOp
 
 OP_KINDS = ("config-overlay", "model-param", "rules", "append-system-prompt")
 REGISTRY_INADMISSIBLE = {"append-system-prompt"}
@@ -194,12 +194,53 @@ def sweep_order(split: dict, base: dict[str, list[dict]]) -> list[str]:
     return sorted(split["held_in"], key=dur) + sorted(split["held_out"], key=dur)
 
 
+def _prepare_run_root(cfg: RatchetConfig, candidate: str, registry: dict) -> Path:
+    run_root = cfg.runs_dir / candidate
+    if (run_root / "manifest.json").exists():
+        raise GateDataError(f"{run_root / 'manifest.json'} already exists "
+                            "(manifests are immutable; pick a new candidate label)")
+    run_root.mkdir(parents=True, exist_ok=True)
+    # #12 decision 6: refuse mismatched arms before any rollout runs
+    if registry.get("concurrency", CONCURRENCY) != CONCURRENCY:
+        raise ClickError(
+            f"envelope mismatch: baseline recorded concurrency "
+            f"{registry['concurrency']} vs runner {CONCURRENCY}; the arms "
+            "are incomparable and the gate never runs over incomparable arms")
+    return run_root
+
+
+def _headroom_notice(split: dict, base: dict) -> None:
+    # #12 decision 5: one informational line, never blocking
+    held_in_base = [base[t] for t in split["held_in"] if base.get(t)]
+    if held_in_base and all(_pass_rate(rows) == 1.0 for rows in held_in_base):
+        print("note: held-in is already 100% at baseline; no pass gain is "
+              "available and this candidate can only win on soft axes")
+
+
+def _apply_surface_op(surface_op, cfg: RatchetConfig, op: ClickOp):
+    if surface_op is None:
+        return None
+    record = surface_op.apply() if op.kind != "config-overlay" \
+        else surface_op.apply(standing_overlays=cfg.standing_overlays)
+    if record.vacuous:
+        raise ClickError(
+            f"vacuous op: the {op.kind} payload matches the current state "
+            f"(prior value {record.prior_value!r}); both arms would be "
+            "identical — nothing to test")
+    return record
+
+
 def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
-              motivated_by: str, k: int | None = None,
+              motivated_by: str | None, k: int | None = None,
               min_k: int = 2, effect: float = 0.15,
               runner: OmpRunner | None = None,
-              rollback_target: str = "") -> tuple[dict, int]:
+              rollback_target: str = "",
+              replication_of: str | None = None) -> tuple[dict, int]:
     """Execute one full click. Returns (manifest, exit_code 0|1).
+
+    motivated_by may be None ONLY for a replication (replication_of set):
+    the op came from a published finding, so there is no local mining to
+    police; operator mutations always name their motivating task.
 
     Raises ClickError/EraError/GateDataError (callers map to exit 2) for
     anything that is a data problem rather than a verdict.
@@ -212,29 +253,16 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
     # Pre-sweep enforcement: invariants 3/7 (motivation) and 5 (one op, by
     # construction of ClickOp), plus era sanity against the BASELINE side
     # before any GPU time is spent.
-    check_motivation(split, motivated_by)
+    if motivated_by is None and replication_of is None:
+        raise ClickError("a mutation cycle needs --motivated-by; only a "
+                         "replication may omit it")
+    if motivated_by is not None:
+        check_motivation(split, motivated_by)
     base = load_results(cfg.runs_dir / baseline_label / "results.jsonl")
     check_era(registry, baseline_label=baseline_label, split=split, base=base,
               cand={}, config_root=cfg.root, gate_version=registry["gate_version"])
-
-    run_root = cfg.runs_dir / candidate
-    if (run_root / "manifest.json").exists():
-        raise GateDataError(f"{run_root / 'manifest.json'} already exists "
-                            "(manifests are immutable; pick a new candidate label)")
-    run_root.mkdir(parents=True, exist_ok=True)
-
-    # #12 decision 6: refuse mismatched arms before any rollout runs
-    if registry.get("concurrency", CONCURRENCY) != CONCURRENCY:
-        raise ClickError(
-            f"envelope mismatch: baseline recorded concurrency "
-            f"{registry['concurrency']} vs runner {CONCURRENCY}; the arms "
-            "are incomparable and the gate never runs over incomparable arms")
-
-    # #12 decision 5: one informational line, never blocking
-    held_in_base = [base[t] for t in split["held_in"] if base.get(t)]
-    if held_in_base and all(_pass_rate(rows) == 1.0 for rows in held_in_base):
-        print("note: held-in is already 100% at baseline; no pass gain is "
-              "available and this candidate can only win on soft axes")
+    run_root = _prepare_run_root(cfg, candidate, registry)
+    _headroom_notice(split, base)
 
     surface_op, extra_config, extra_sys = build_op(cfg, runner, op)
 
@@ -251,15 +279,7 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
 
     apply_record = None
     try:
-        if surface_op is not None:
-            apply_record = surface_op.apply() if op.kind != "config-overlay" \
-                else surface_op.apply(standing_overlays=cfg.standing_overlays)
-            if apply_record.vacuous:
-                raise ClickError(
-                    f"vacuous op: the {op.kind} payload matches the current "
-                    "state (prior value "
-                    f"{apply_record.prior_value!r}); both arms would be "
-                    "identical — nothing to test")
+        apply_record = _apply_surface_op(surface_op, cfg, op)
         sweep = run_sweep(split, base, rollout, screening_k=k or SCREENING_K,
                           baseline_label=baseline_label, candidate=candidate,
                           min_k=min_k, effect=effect)
@@ -270,6 +290,7 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
     op_record = {
         "candidate": candidate, "op": {"kind": op.kind, **op.payload},
         "op_digest12": op.digest12(), "motivated_by": motivated_by,
+        "replication_of": replication_of,
         "declared_surface": op.kind,
         "registry_admissible": op.kind not in REGISTRY_INADMISSIBLE,
         "apply": None if apply_record is None else {
@@ -286,6 +307,14 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
     manifest, code = decide(split, base, cand, baseline_label=baseline_label,
                             candidate_label=candidate, min_k=min_k,
                             effect=effect, rollback_target=rollback_target)
+    _record_sweep_in_manifest(manifest, sweep, split)
+    write_manifest(run_root / "manifest.json", manifest)
+    return manifest, code
+
+
+def _record_sweep_in_manifest(manifest: dict, sweep: SweepResult,
+                              split: dict) -> None:
+    """The #12 bookkeeping fields, additive beside the gate's verdict."""
     if not sweep.promote_so_far:
         reason = sweep.abort_condition if sweep.aborted \
             else "rejected before sentinels"
@@ -304,5 +333,3 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
             rollouts_planned=(gated_n + sentinel_n) * sweep.final_k,
             aborted=sweep.aborted, task_order=sweep.task_order),
     })
-    write_manifest(run_root / "manifest.json", manifest)
-    return manifest, code

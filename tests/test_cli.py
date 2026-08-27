@@ -5,9 +5,9 @@ import pytest
 from ratchet.cli import main
 
 
-def test_deferred_replicate_exits_2(capsys):
-    assert main(["replicate"]) == 2
-    assert "not implemented yet" in capsys.readouterr().err
+def test_replicate_requires_flags():
+    with pytest.raises(SystemExit):  # argparse: finding + --submitter
+        main(["replicate"])
 
 
 def test_export_requires_flags():

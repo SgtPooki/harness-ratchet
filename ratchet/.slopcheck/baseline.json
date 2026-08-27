@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "files_analyzed": 19,
-  "function_count": 127,
-  "erosion": 0.4808,
-  "duplication": 0.0178,
+  "files_analyzed": 20,
+  "function_count": 144,
+  "erosion": 0.4093,
+  "duplication": 0.0157,
   "duplicated_lines": 43,
-  "total_code_lines": 2422,
+  "total_code_lines": 2732,
   "max_ccn": 41,
   "dead_code": null,
   "dead_code_tool": null,
@@ -27,12 +27,6 @@
       "name": "cmd_click( args )",
       "ccn": 22,
       "nloc": 40
-    },
-    {
-      "file": "click.py",
-      "name": "run_click( cfg : RatchetConfig , * , candidate : str , op : ClickOp , motivated_by : str , k : int | None = None , min_k : int = 2 , effect : float = 0 . 15 , runner : OmpRunner | None = None , rollback_target : str = \"\" )",
-      "ccn": 20,
-      "nloc": 84
     },
     {
       "file": "kernel/pack.py",
@@ -69,6 +63,12 @@
       "name": "check_era( registry : dict , * , baseline_label : str , split : dict , base : dict [ str , list [ dict ] ] , cand : dict [ str , list [ dict ] ] , config_root : Path , gate_version : int = GATE_VERSION )",
       "ccn": 11,
       "nloc": 24
+    },
+    {
+      "file": "replicate.py",
+      "name": "replicate_transfer( cfg : RatchetConfig , finding : dict , * , submitter : str , out_root : Path , k : int | None = None , runner = None )",
+      "ccn": 11,
+      "nloc": 57
     }
   ]
 }
