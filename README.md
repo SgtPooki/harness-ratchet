@@ -2,31 +2,71 @@
 
 **A ratchet for local coding agents: harness improvements only move forward.**
 
-harness-ratchet automatically improves the harness (prompts, rules, context,
-config) around a frozen local model — no fine-tuning. It mints eval tasks from
-your own repositories, audits every verifier for gameability, and accepts a
-harness change only when it passes evidence gates: multi-run rollouts, held-out
+harness-ratchet improves the harness (prompts, rules, context, config) around
+a frozen local model, with no fine-tuning. It mints eval tasks from your own
+repositories, audits every verifier for gameability, and accepts a harness
+change only when it passes evidence gates: multi-run rollouts, held-out
 non-regression, effect-size thresholds, automatic rollback. Like a mechanical
-ratchet — or a CI coverage ratchet — the loop is built so quality can click
+ratchet, or a CI coverage ratchet, the loop is built so quality can click
 forward but cannot silently slip back.
 
 Motto: *nothing the optimizer influences may own the scoreboard.*
 
+Findings that survive the gate become falsifiable public claims in
+[harness-registry](https://github.com/SgtPooki/harness-registry), where anyone
+running a similar stack can replicate or refute them. Negative results are
+first-class: the registry's first object is a rejection.
 
-Baseline eval pack for harness-engineering iterations on the omp (oh-my-pi)
-agent harness, per the observability-driven loop in
-[Agentic Harness Engineering](https://arxiv.org/abs/2604.25850): score the
-harness before and after each mutation; keep only what measurably helps.
+## The loop
+
+```
+ratchet init <bank>            scaffold a private bank: era state, config, overlays
+ratchet mint <spec>            excise a function from a real repo; its existing
+                               human tests become the hidden verifier
+ratchet audit --pack <dir>     re-execute every task's oracle triple
+ratchet baseline sweep <label> record the era floor (full k, sentinels included)
+ratchet probe <channel>        observable-token liveness test for a mutation channel
+ratchet click <candidate> ...  ONE mutation, A/B against the pinned baseline:
+                               k=2 screening, early abort when rejection is
+                               certain, sentinels only on the promotion path
+ratchet export <candidate>     assemble a digest-sealed finding from a claim-grade run
+ratchet replicate <finding>    re-test a published finding (exact or transfer lane)
+```
+
+The gate (`ratchet/kernel/gate.py`, version 4) is the only thing that promotes
+or rejects. Held-in tasks are where improvement counts; held-out tasks are a
+non-regression floor the proposer never sees; sentinel tasks never gate and
+exist to catch drift. Verifiers are never authored by whatever proposes tasks
+or mutations. The seven invariants live in [CONTEXT.md](CONTEXT.md); the full
+verdict history lives in [RESULTS.md](RESULTS.md).
+
+## What is in this repo
+
+- `ratchet/` — the installable kit: verification kernel (gate, oracle
+  admission, era registry, pack and finding formats, digests), the omp runner
+  adapter, the excision miner, and the CLI. The kernel imports neither runner
+  nor miner; CI enforces it.
+- `tasks/` — the bootstrap pack: nine public demo tasks, permanently burned as
+  headroom (public code is presumed trained on) and kept as rails.
+- `floors/` — the public floor pack: tasks minted from permissively licensed
+  code whose targets changed after the subject model's release, vintage-dated
+  and treated as ephemeral epochs. `floors/RECENCY.md` carries the provenance.
+- `tests/` — the suite, including 156 frozen golden fixtures that pin the gate
+  math byte-for-byte across refactors.
+
+Personal banks (headroom tasks minted from private code, era state, run
+evidence) live outside this repo and never publish; a claim that touches one
+is transfer-lane only in the registry.
 
 ## Prior art, and why this exists
 
 Good adjacent projects exist; none fit the constraint set this tool is built
-for — improving a **closed external CLI harness** around a **fully local**
+for: improving a **closed external CLI harness** around a **fully local**
 model, with **task generation inside the loop**.
 
-- **[auto-harness](https://github.com/neosigmaai/auto-harness)** (MIT, ~535★
-  as of 2026-08) has the same loop shape: mine failure traces, edit the agent,
-  gate against regressions. Its mutation target is its own bundled
+- **[auto-harness](https://github.com/neosigmaai/auto-harness)** (MIT, ~535
+  stars as of 2026-08) has the same loop shape: mine failure traces, edit the
+  agent, gate against regressions. Its mutation target is its own bundled
   `agent/agent.py`, so adopting it means replacing your harness with its
   agent. harness-ratchet instead treats the harness (omp today) as a black box
   and mutates only its exposed surfaces: rules, context files, config. Its
@@ -34,7 +74,7 @@ model, with **task generation inside the loop**.
 - **[agentic-harness-engineering](https://github.com/china-qijizhifeng/agentic-harness-engineering)**
   (the official code for [arXiv 2604.25850](https://arxiv.org/abs/2604.25850))
   evolves seven harness component types with git-revertible file
-  representations — discipline we borrow. Its published campaigns run ~96
+  representations, discipline we borrow. Its published campaigns run ~96
   concurrent sandboxes over ~32 hours with frontier evolve-agents; this repo
   targets one GPU and one maintainer.
 - **[Harneloop](https://github.com/Ker102/Harneloop)** (Apache-2, v0.0.2)
@@ -44,48 +84,30 @@ model, with **task generation inside the loop**.
 
 Two mechanisms here appear in none of the above:
 
-1. **Task minting with un-gameable oracles** (planned; pattern from
+1. **Task minting with un-gameable oracles** (pattern from
    [FeatureBench](https://arxiv.org/abs/2602.10975)): tasks are generated by
-   excising features covered by *existing human-written tests* in your own
-   repos, so the generator can never author the thing that grades it.
-2. **Verifier auditing** (`bin/oracle.sh`): every task must fail unmodified,
-   pass with the reference solution, and fail with a *sabotaged* solution —
-   a tautological verifier is rejected before it can score anything.
+   excising functions covered by *existing human-written tests* in real
+   repos, so the generator can never author the thing that grades it. The
+   miner also demands a killed sabotage mutant and stable re-runs before a
+   task is admitted, and logs every rejected attempt under a closed failure
+   taxonomy.
+2. **Verifier auditing** (`ratchet audit`): every task must fail unmodified,
+   pass with the reference solution, and fail with a *sabotaged* solution; a
+   tautological verifier is rejected before it can score anything.
 
 The loop skeleton follows [Self-Harness](https://arxiv.org/abs/2606.09498)
 (held-in improvement plus held-out non-regression, demonstrated on a
 Qwen-class open model with no stronger teacher); context evolution follows
 [ACE](https://arxiv.org/abs/2510.04618); prompt-subset optimization follows
 [GEPA](https://arxiv.org/abs/2507.19457). Design history, peer reviews, and
-the build-vs-adopt decision live in [BUILD-VS-ADOPT.md](BUILD-VS-ADOPT.md)
-and [LOOP-DESIGN.md](LOOP-DESIGN.md).
-
-## Layout
-
-- `tasks/<name>/prompt.md` — what the agent is told
-- `tasks/<name>/workspace/` — the code the agent works on (copied per run)
-- `tasks/<name>/verify/` — hidden verifier (never shown to the agent); plain
-  python3/node, zero dependencies, prints `PASS` and exits 0 on success
-- `tasks/<name>/solution/` — reference solution overlay, used only by the oracle
-- `bin/oracle.sh` — solvability gate: unmodified workspace must FAIL, workspace
-  + solution must PASS, for every task. Run after any task edit.
-- `bin/run.sh <task|all> [model] [label]` — copies the workspace, runs
-  `omp -p --auto-approve --model <model>` with the prompt, verifies, appends to
-  `runs/<label>/results.jsonl` (transcript saved alongside)
-
-## Tasks (failure surface each targets)
-
-| task | surface |
-|---|---|
-| 01-py-pagination | minimal-edit debugging, boundary reasoning |
-| 02-py-config-type | cross-file tracing, fix-at-the-right-layer |
-| 03-js-slugify | spec-following, edge cases |
-| 04-sh-backup | shell/terminal competence (quoting, find -print0) |
-| 05-py-dedupe | constraint-following refactor (structural checks) |
-| 06-py-version-sync | codebase search, consistency |
+the build-vs-adopt decision live in [BUILD-VS-ADOPT.md](BUILD-VS-ADOPT.md),
+[LOOP-DESIGN.md](LOOP-DESIGN.md), [VISION.md](VISION.md), and the resolved
+issues in this repo's tracker.
 
 ## Rules
 
-- Never show the agent anything under `verify/` or `solution/`.
-- A task only counts while `bin/oracle.sh` is green.
-- One variable at a time: change one harness component between labeled runs.
+- Never show the agent anything under `verify/`, `solution/`, or `sabotage/`.
+- A task only counts while its oracle triple is green.
+- One mutation per candidate, tied to a named failure pattern mined from
+  held-in or sentinel evidence only.
+- Era floors are recorded on a quiet machine or not at all.
