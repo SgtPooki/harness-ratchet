@@ -1,5 +1,26 @@
 # Results ledger
 
+## First replication — 2026-08-27 — the pipeline closes its own loop
+
+The contract-discipline finding was replicated through the shipped
+replicate verb, both lanes exercised on real objects. Exact lane:
+stage-A pin checks correctly produced an environment-mismatch manifest
+(the claim touches a private pack, unobtainable by anyone else;
+recorded, never tallied). Transfer lane: a full k=4 re-run through the
+replicator's own loop whose gate REJECT agrees with the negative-result
+claim, outcome replicated, private task ids anonymized to stable
+t1/t2-style ids with difficulty bands before the evidence left the
+machine. Dogfooding caught and fixed two real defects first: replicated
+now means the replicator's verdict AGREES with the claim (a REJECT
+confirms a negative result), and the replicator's concurrency comes
+from the runner, not the operator envelope file.
+
+Every stage of VISION stages 1 through 3 has now executed at least once
+on real data: mint, audit, baseline, probe, click, export, replicate,
+and the registry repo with its mechanical merge gates. Registry seeding
+waits on one amendment (private-pack task ids anonymized in finding
+split blocks, the #7 principle extended to findings).
+
 ## mut-contract-lean-k4 — 2026-08-27 — **REJECTED** at claim grade; the first finding
 
 The lean contract rule re-proposed at k=4 under the locked re-proposal
