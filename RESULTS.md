@@ -1,5 +1,43 @@
 # Results ledger
 
+## baseline-v8 — 2026-08-27 — the floor gets breadth, and the binary axis hides it
+
+Split v5 (four new minted tasks join held-in) with a fresh k=4 baseline over
+every task in both packs: 76 rollouts, 6400s wall for the bank half, 25.6M
+tokens_in. Every public bootstrap task is 4/4, including the sentinel that
+drifted to 2/4 at v7, so that drift was not persistent.
+
+All four new mints came back 0/4. Taken at face value that is four more
+copies of the same uninformative zero the era already had, and it would be a
+poor result for the breadth work. The graded reading says something else
+entirely. Recovered from verifier output the runner was already recording:
+
+| task | composite | tests passed |
+|---|---|---|
+| new mint A | 0/4 | 4 to 5 of 20 |
+| new mint B | 0/4 | 6 to 9 of 16 |
+| new mint C | 0/4 | 3 to 4 of 7 |
+| new mint D | 0/4 | 29 to 30 of 40 |
+
+Those span roughly 20 to 75 percent, which is the informative band the
+breadth work was aiming at. The binary axis collapses that spread into four
+identical zeros. This is the clearest evidence yet for the graded-signal
+ticket, and it arrived by accident: the tasks were selected for a difficulty
+range and hit one, but only one of the two axes can see it.
+
+Two findings fell out of the sweep. Three earlier bank mints that had never
+been assigned a role in any split turn out to be exactly the headroom the
+breadth work went looking for (one at 1/4, two failing by a handful of tests).
+Part of the weak-floor problem was bookkeeping, not minting. And one new task
+has a verifier that can time out when an agent's implementation leaves real
+sleeps in a polling loop: it fails closed, so it is sound, but it costs 300s
+and yields no graded reading on those rollouts.
+
+Honest note on the mint selection rule: rich docstrings were made a hard
+requirement so a task would be hard rather than underdetermined. All four
+still landed at 0/4, and the failures are the same exact-wording and
+robustness classes seen before. Necessary, not sufficient.
+
 ## Registry seeded — 2026-08-27 — stage 3 complete
 
 harness-registry holds its first three objects: the
