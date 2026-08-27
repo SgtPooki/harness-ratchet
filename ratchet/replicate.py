@@ -29,6 +29,7 @@ from ratchet.config import RatchetConfig
 from ratchet.kernel.digests import canonical_json, finding_digest
 from ratchet.kernel.era import load_registry
 from ratchet.kernel.gate import load_results
+from ratchet.export import _anonymize, _anonymize_text, _private_tasks
 from ratchet.kernel.schemas import validation_errors
 
 
@@ -108,18 +109,6 @@ def _difficulty_band(rows: list[dict]) -> str:
     return "passing" if all(r["pass"] for r in rows) else "headroom"
 
 
-def _anonymize(cfg: RatchetConfig, task_ids: list[str]) -> dict[str, str]:
-    """Stable anonymous ids per replicator+bank (#7 amendment): the mapping
-    persists in the era dir and only ever grows."""
-    p = cfg.era_dir / "task-anon-map.json"
-    mapping = json.loads(p.read_text()) if p.is_file() else {}
-    for t in sorted(task_ids):
-        if t not in mapping:
-            mapping[t] = f"t{len(mapping) + 1}"
-    p.write_text(json.dumps(mapping, indent=1) + "\n")
-    return mapping
-
-
 def _replicator_block(cfg: RatchetConfig) -> dict:
     return {
         "model_fingerprint": json.loads(
@@ -153,11 +142,6 @@ def _seal_replication(out_root: Path, doc: dict, finding_digest12: str,
     except Exception:
         shutil.rmtree(rdir, ignore_errors=True)
         raise
-
-
-def _private_tasks(cfg: RatchetConfig, task_ids: list[str]) -> list[str]:
-    """Tasks living in the bank pack: their ids never leave the machine."""
-    return [t for t in task_ids if (Path(cfg.bank_pack) / t).is_dir()]
 
 
 def replicate_transfer(cfg: RatchetConfig, finding: dict, *,
@@ -260,11 +244,6 @@ def _write_replication_evidence(ev: Path, cfg: RatchetConfig, manifest: dict,
             _anonymize_text(_redact(text, home), anon))
 
 
-def _anonymize_text(text: str, mapping: dict[str, str]) -> str:
-    """Private-bank task ids never leave the machine (#7 amendment)."""
-    for real, anon in sorted(mapping.items(), key=lambda kv: -len(kv[0])):
-        text = text.replace(real, anon)
-    return text
 
 
 def write_mismatch(cfg: RatchetConfig, finding: dict, *, submitter: str,

@@ -165,3 +165,23 @@ def test_export_fails_closed_without_fingerprint(cfg):
 def test_export_kind_decision_mismatch(cfg):
     with pytest.raises(ExportError, match="requires a REJECT"):
         do_export(cfg, kind="negative-result")
+
+
+def test_export_anonymizes_private_pack_ids(cfg):
+    # the whole fixture split lives in the bank (private): every id in the
+    # published roles and evidence is anonymized; hr-sd-1 stays computed
+    # over the real ids (the 2026-08-27 amendment on #5)
+    from ratchet.kernel.digests import split_digest
+    out = do_export(cfg)
+    doc = json.loads((out / "finding.json").read_text())
+    roles = doc["claim"]["split"]["roles"]
+    assert roles == {"held_in": ["t1"], "held_out": ["t2"], "sentinel": ["t3"]}
+    assert doc["claim"]["split"]["digest"] == split_digest(
+        9, ["t-a"], ["t-b"], ["t-s"])
+    for name in ("manifest.json", "candidate.results.jsonl",
+                 "baseline.results.jsonl"):
+        text = (out / "evidence" / name).read_text()
+        assert "t-a" not in text and "t-b" not in text
+    # the persistent map grew and matches what replications will use
+    mapping = json.loads((cfg.era_dir / "task-anon-map.json").read_text())
+    assert mapping == {"t-a": "t1", "t-b": "t2", "t-s": "t3"}

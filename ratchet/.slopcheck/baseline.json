@@ -2,10 +2,10 @@
   "version": 2,
   "files_analyzed": 20,
   "function_count": 144,
-  "erosion": 0.4093,
-  "duplication": 0.0157,
-  "duplicated_lines": 43,
-  "total_code_lines": 2732,
+  "erosion": 0.4082,
+  "duplication": 0.0201,
+  "duplicated_lines": 55,
+  "total_code_lines": 2742,
   "max_ccn": 41,
   "dead_code": null,
   "dead_code_tool": null,
@@ -50,7 +50,7 @@
       "file": "export.py",
       "name": "export_finding( cfg : RatchetConfig , * , candidate : str , slug : str , kind : str , submitter : str , out_root : Path , target_finding : str | None = None , home : str | None = None )",
       "ccn": 12,
-      "nloc": 63
+      "nloc": 64
     },
     {
       "file": "runner/ops.py",
@@ -68,7 +68,7 @@
       "file": "replicate.py",
       "name": "replicate_transfer( cfg : RatchetConfig , finding : dict , * , submitter : str , out_root : Path , k : int | None = None , runner = None )",
       "ccn": 11,
-      "nloc": 57
+      "nloc": 58
     }
   ]
 }

@@ -81,6 +81,32 @@ def _packs_of(cfg: RatchetConfig, task_ids: list[str]) -> list[dict]:
     return sorted(refs, key=lambda r: r["name"])
 
 
+def _private_tasks(cfg: RatchetConfig, task_ids: list[str]) -> list[str]:
+    """Tasks living in the bank pack: their ids never leave the machine."""
+    return [t for t in task_ids if (Path(cfg.bank_pack) / t).is_dir()]
+
+
+def _anonymize(cfg: RatchetConfig, task_ids: list[str]) -> dict[str, str]:
+    """Stable anonymous ids per operator (#7 amendment, extended to
+    findings by the 2026-08-27 amendment on #5): the mapping persists in
+    the era dir and only ever grows, so findings and replications stay
+    mutually auditable."""
+    p = cfg.era_dir / "task-anon-map.json"
+    mapping = json.loads(p.read_text()) if p.is_file() else {}
+    for t in sorted(task_ids):
+        if t not in mapping:
+            mapping[t] = f"t{len(mapping) + 1}"
+    p.write_text(json.dumps(mapping, indent=1) + "\n")
+    return mapping
+
+
+def _anonymize_text(text: str, mapping: dict[str, str]) -> str:
+    """Private-pack task ids never leave the machine."""
+    for real, anon in sorted(mapping.items(), key=lambda kv: -len(kv[0])):
+        text = text.replace(real, anon)
+    return text
+
+
 def _channel_liveness(cfg: RatchetConfig, op_kind: str) -> dict:
     if op_kind in ("config-overlay", "model-param"):
         return {"not_required": f"{op_kind} is a file-level config channel; "
@@ -142,7 +168,7 @@ def _load_claim_grade_run(cfg: RatchetConfig, candidate: str,
 
 def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
                  split: dict, packs: list[dict], op_kind: str,
-                 final_k: int) -> dict:
+                 final_k: int, anon: dict[str, str]) -> dict:
     fingerprint = _operator_file(cfg.era_dir, "model-fingerprint.json",
                                  "the hr-mf-1 block (compute weights_digest "
                                  "where the weights live)")
@@ -167,7 +193,7 @@ def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
                                          split["held_in"], split["held_out"],
                                          split["sentinel"]),
                   "split_version": split["split_version"],
-                  "roles": {r: split[r] for r in
+                  "roles": {r: [anon.get(t, t) for t in split[r]] for r in
                             ("held_in", "held_out", "sentinel")}},
         "baseline_harness": {"standing_overlays": overlays},
         "channel_liveness": _channel_liveness(cfg, op_kind),
@@ -182,16 +208,19 @@ def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
 
 
 def _write_evidence(ev: Path, cfg: RatchetConfig, manifest: dict,
-                    run_root: Path, wanted: set[str], home: str) -> None:
+                    run_root: Path, wanted: set[str], home: str,
+                    anon: dict[str, str]) -> None:
     ev.mkdir()
-    shutil.copy(run_root / "manifest.json", ev / "manifest.json")
+    (ev / "manifest.json").write_text(_anonymize_text(
+        (run_root / "manifest.json").read_text(), anon))
     for label, src in (("candidate", run_root),
                        ("baseline", cfg.runs_dir / manifest["baseline"])):
         rows = [_cap_verify_tail(json.loads(line))
                 for line in (src / "results.jsonl").read_text().splitlines()
                 if line.strip() and json.loads(line)["task"] in wanted]
         text = "\n".join(json.dumps(r, sort_keys=True) for r in rows) + "\n"
-        (ev / f"{label}.results.jsonl").write_text(_redact(text, home))
+        (ev / f"{label}.results.jsonl").write_text(
+            _anonymize_text(_redact(text, home), anon))
 
 
 def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
@@ -211,11 +240,12 @@ def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
                           "manifest's; the era moved on")
     all_tasks = split["held_in"] + split["held_out"] + split["sentinel"]
     packs = _packs_of(cfg, all_tasks)
+    anon = _anonymize(cfg, _private_tasks(cfg, all_tasks))
 
     op = {"kind": op_rec["op"]["kind"],
           "payload": {k: v for k, v in op_rec["op"].items() if k != "kind"}}
     engine, claim = _claim_block(cfg, manifest, registry, split, packs,
-                                 op["kind"], final_k)
+                                 op["kind"], final_k, anon)
     doc = {
         "format_version": 1,
         "digest": None,
@@ -248,7 +278,7 @@ def export_finding(cfg: RatchetConfig, *, candidate: str, slug: str,
         (tmp / "finding.json").write_text(canonical_json(doc))
         _mutation_files(op, tmp / "mutation")
         _write_evidence(tmp / "evidence", cfg, manifest,
-                        cfg.runs_dir / candidate, set(all_tasks), home)
+                        cfg.runs_dir / candidate, set(all_tasks), home, anon)
         digest = finding_digest(tmp)
         doc["digest"] = digest
         (tmp / "finding.json").write_text(canonical_json(doc))
