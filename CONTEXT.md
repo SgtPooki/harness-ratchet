@@ -70,7 +70,9 @@ If a change needs a term to mean something else, change this file first.
 3. Sentinel tasks never gate and are never optimized against. Running a
    mutation cycle that targets a sentinel invalidates the candidate. (mutA/
    mutB targeted 04 before the split existed; that is why this is written
-   down.)
+   down.) External benchmark suites used as era-boundary checkpoints carry
+   sentinel status by extension (#14): never mined, never optimized
+   against, never a gate input.
 4. Manifests are immutable; the gate refuses to overwrite one.
 5. One mutation per candidate label (process-enforced via the manifest's
    declared surface; not yet mechanically verified).
