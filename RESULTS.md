@@ -1,5 +1,25 @@
 # Results ledger
 
+## Registry seeded — 2026-08-27 — stage 3 complete
+
+harness-registry holds its first three objects: the
+contract-discipline-rules negative-result finding (private-pack task
+ids anonymized per the finding-format amendment) and its two
+replications, an exact-lane environment-mismatch and a local-transfer
+replicated verdict. The transfer re-run also gave the early-abort
+machinery its first production firing: held-out 09 dropped a rollout
+against a 1.00 baseline floor, the certainty condition triggered
+mid-sweep, the remaining rollouts were skipped, and the resulting
+REJECT agrees with the claim. An earlier attempt at this replication
+was discarded by the book when concurrent model load contaminated its
+duration axis; the published run is from a verified-quiet machine.
+
+Two robustness fixes fell out of the day's dogfooding: trap-restore now
+survives SIGTERM and SIGINT (a killed sweep once left its rules block
+applied), and the registry validator computes a finding's hr-fd-1
+excluding its nested replications, which are attachments per the
+replication resolution.
+
 ## First replication — 2026-08-27 — the pipeline closes its own loop
 
 The contract-discipline finding was replicated through the shipped
