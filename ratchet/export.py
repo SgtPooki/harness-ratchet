@@ -107,6 +107,12 @@ def _anonymize_text(text: str, mapping: dict[str, str]) -> str:
     return text
 
 
+def _anonymize_obj(obj, mapping: dict[str, str]):
+    """The same replacement over any JSON value (e.g. sweep_cost with its
+    task_order list)."""
+    return json.loads(_anonymize_text(json.dumps(obj), mapping))
+
+
 def _channel_liveness(cfg: RatchetConfig, op_kind: str) -> dict:
     if op_kind in ("config-overlay", "model-param"):
         return {"not_required": f"{op_kind} is a file-level config channel; "
@@ -202,8 +208,10 @@ def _claim_block(cfg: RatchetConfig, manifest: dict, registry: dict,
                              "omp_model_alias": cfg.model,
                              "timeout_s": cfg.timeout_s,
                              "concurrency": manifest.get("concurrency", 1)},
-        "sweep_cost": {"baseline": registry.get("sweep_cost", {}),
-                       "candidate": manifest.get("sweep_cost", {})},
+        "sweep_cost": {
+            "baseline": _anonymize_obj(registry.get("sweep_cost", {}), anon),
+            "candidate": _anonymize_obj(manifest.get("sweep_cost", {}), anon),
+        },
     }
 
 

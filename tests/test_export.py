@@ -182,6 +182,8 @@ def test_export_anonymizes_private_pack_ids(cfg):
                  "baseline.results.jsonl"):
         text = (out / "evidence" / name).read_text()
         assert "t-a" not in text and "t-b" not in text
+    # sweep_cost task ids (task_order and friends) are anonymized too
+    assert "t-a" not in json.dumps(doc["claim"]["sweep_cost"])
     # the persistent map grew and matches what replications will use
     mapping = json.loads((cfg.era_dir / "task-anon-map.json").read_text())
     assert mapping == {"t-a": "t1", "t-b": "t2", "t-s": "t3"}
