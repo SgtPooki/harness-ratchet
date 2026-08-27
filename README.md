@@ -42,16 +42,16 @@ verdict history lives in [RESULTS.md](RESULTS.md).
 
 ## What is in this repo
 
-- `ratchet/` — the installable kit: verification kernel (gate, oracle
+- `ratchet/`: the installable kit: verification kernel (gate, oracle
   admission, era registry, pack and finding formats, digests), the omp runner
   adapter, the excision miner, and the CLI. The kernel imports neither runner
   nor miner; CI enforces it.
-- `tasks/` — the bootstrap pack: nine public demo tasks, permanently burned as
+- `tasks/`: the bootstrap pack: nine public demo tasks, permanently burned as
   headroom (public code is presumed trained on) and kept as rails.
-- `floors/` — the public floor pack: tasks minted from permissively licensed
+- `floors/`: the public floor pack: tasks minted from permissively licensed
   code whose targets changed after the subject model's release, vintage-dated
   and treated as ephemeral epochs. `floors/RECENCY.md` carries the provenance.
-- `tests/` — the suite, including 156 frozen golden fixtures that pin the gate
+- `tests/`: the suite, including 156 frozen golden fixtures that pin the gate
   math byte-for-byte across refactors.
 
 Personal banks (headroom tasks minted from private code, era state, run
