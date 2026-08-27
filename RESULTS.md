@@ -1,5 +1,30 @@
 # Results ledger
 
+## mut-contract-lean — 2026-08-27 — **REJECTED** (cycle 7 closes the rule class)
+
+The leaner phrasing of cycle 6's contract discipline (verify against the
+documented contract, distrust self-authored tests, no mandatory
+checklist extraction). The hypothesis held where it was aimed: the
+held-in tokens_in tax collapsed from +24 percent to +3.1 percent
+(noise) and the 03 pass gain repeated at 2/2. The gate killed it one
+floor over: held-out tokens_in_p50 rose 19.7 percent (1.15M to 1.37M),
+and held-out is a floor. The rule taxes contract re-reading roughly
+everywhere; held-in absorbed it this time, held-out did not. The target
+task did not move in either cycle (16 at 0/2 both times).
+
+Verdict on the class, not just the candidate: two phrasings of
+RULES.md contract discipline are now priced at k=2, both rejected on
+token floors, neither touching the pathology they were aimed at. The
+class is dry; a third phrasing would be squeezing. The claimed-done
+mechanism on 16 (circular self-validation) needs a different lever than
+prose exhortation. Next distinct hypothesis on record: the 04
+compaction-thrash sentinel evidence points at omp's context-management
+config, a different surface entirely.
+
+Cost note: both screening rejects together (2844s wall, 12.5M tokens_in)
+cost less than ONE v6-era sweep. The cheap flow is why trying both
+phrasings was affordable at all.
+
 ## mut-contract-checklist — 2026-08-26 — **REJECTED** (cycle 6, first run of the cheap flow)
 
 Mutation: a RULES.md contract-checklist discipline (extract every
