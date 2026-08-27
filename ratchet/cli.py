@@ -495,9 +495,12 @@ def cmd_replicate(args) -> int:
         finding = load_finding(Path(args.finding))
         fp = _operator_file(cfg.era_dir, "model-fingerprint.json",
                             "the replicator hr-mf-1 block")
+        from ratchet.runner.base import CONCURRENCY
         env = _operator_file(cfg.era_dir, "engine-envelope.json",
                              "the replicator engine envelope"
                              ).get("runtime_envelope", {})
+        # concurrency is the runner's mechanical fact, never an era field
+        env = {**env, "concurrency": CONCURRENCY}
     except (ReplicateError, ExportError) as e:
         print(str(e), file=sys.stderr)
         return 2
