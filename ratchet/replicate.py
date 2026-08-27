@@ -186,7 +186,11 @@ def replicate_transfer(cfg: RatchetConfig, finding: dict, *,
             min_k=finding["claim"]["gate"]["min_k"],
             effect=finding["claim"]["gate"]["effect_threshold"],
             runner=runner)
-        outcome = "replicated" if manifest["decision"] == "PROMOTE" else "refuted"
+        # replicated means the replicator's gate agrees with the CLAIM: a
+        # PROMOTE replicates an improvement, and a REJECT replicates a
+        # negative result (both verdicts are mechanical either way)
+        agrees = manifest["decision"] == finding["claim"]["decision"]
+        outcome = "replicated" if agrees else "refuted"
     except ClickError as e:
         if "vacuous" not in str(e):
             raise ReplicateError(f"replicate: {e}") from e

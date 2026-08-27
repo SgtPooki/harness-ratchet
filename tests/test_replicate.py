@@ -141,26 +141,28 @@ def test_write_mismatch_manifest_validates(tmp_path, finding):
     assert validation_errors("replication", rep) == []
 
 
-def test_transfer_refuted_and_anonymized(tmp_path, finding):
+def test_transfer_replicates_negative_result_and_anonymizes(tmp_path, finding):
+    # the fixture's finding is a negative-result (REJECT) claim; identical
+    # arms REJECT here too, and agreement with the claim is "replicated"
     doc = load_finding(finding)
     cfg = make_bank(tmp_path / "replicator", private_bank=True)
-    runner = OpRunner({}, tmp_path / "rep-omp")  # identical arms -> REJECT
+    runner = OpRunner({}, tmp_path / "rep-omp")
     path, outcome = replicate_transfer(cfg, doc, submitter="github:rep",
                                        out_root=cfg.root / "replications",
                                        runner=runner)
-    assert outcome == "refuted"
+    assert outcome == "replicated"
     rep = json.loads((path / "replication.json").read_text())
     assert rep["lane"] == "local-transfer"
     assert validation_errors("replication", rep) == []
-    # a refuted transfer is a gate REJECT even though the arms tied (#7:
-    # the mutation did not help this stack)
     assert set(rep["task_anonymization"]) == {"t1", "t2", "t3"}
     # private bank ids never appear in the shipped evidence
     ev = (path / "evidence" / "candidate.results.jsonl").read_text()
     assert "hi-a" not in ev and "t1" in ev
 
 
-def test_transfer_replicated_on_faster_arms(tmp_path, finding):
+def test_transfer_refutes_negative_result_on_faster_arms(tmp_path, finding):
+    # faster arms PROMOTE on this stack, contradicting the REJECT claim:
+    # the negative result is refuted (the mutation helped here after all)
     doc = load_finding(finding)
     cfg = make_bank(tmp_path / "replicator", private_bank=True)
     script = {(t, i): {"duration_s": 2} for t in TASKS for i in range(1, 5)}
@@ -168,7 +170,7 @@ def test_transfer_replicated_on_faster_arms(tmp_path, finding):
     path, outcome = replicate_transfer(cfg, doc, submitter="github:rep",
                                        out_root=cfg.root / "replications",
                                        runner=runner)
-    assert outcome == "replicated"
+    assert outcome == "refuted"
 
 
 def test_transfer_vacuous_from_apply_flag(tmp_path, finding):
