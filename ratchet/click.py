@@ -26,8 +26,10 @@ record) but is registry-inadmissible until a finding-format version bump
 (#5 amendment); its op.json is marked accordingly.
 """
 
+import contextlib
 import hashlib
 import json
+import signal
 import statistics
 import time
 from dataclasses import dataclass
@@ -217,6 +219,28 @@ def _headroom_notice(split: dict, base: dict) -> None:
               "available and this candidate can only win on soft axes")
 
 
+@contextlib.contextmanager
+def _restore_on_signals():
+    """Python skips finally blocks on default SIGTERM death, which would
+    leave a surface op applied to personal config (observed once: a killed
+    replication left its rules block in RULES.md). Convert SIGTERM and
+    SIGINT to an exception inside the applied window so trap-restore always
+    runs; the original handlers come back afterward."""
+    def raise_it(signum, _frame):
+        raise ClickError(f"signal {signum}: sweep interrupted; restoring")
+    previous = {}
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            previous[sig] = signal.signal(sig, raise_it)
+        except ValueError:      # non-main thread (tests): no handler swap
+            pass
+    try:
+        yield
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+
+
 def _apply_surface_op(surface_op, cfg: RatchetConfig, op: ClickOp):
     if surface_op is None:
         return None
@@ -278,14 +302,16 @@ def run_click(cfg: RatchetConfig, *, candidate: str, op: ClickOp,
         return row
 
     apply_record = None
-    try:
-        apply_record = _apply_surface_op(surface_op, cfg, op)
-        sweep = run_sweep(split, base, rollout, screening_k=k or SCREENING_K,
-                          baseline_label=baseline_label, candidate=candidate,
-                          min_k=min_k, effect=effect)
-    finally:
-        if surface_op is not None:
-            surface_op.restore()
+    with _restore_on_signals():
+        try:
+            apply_record = _apply_surface_op(surface_op, cfg, op)
+            sweep = run_sweep(split, base, rollout,
+                              screening_k=k or SCREENING_K,
+                              baseline_label=baseline_label,
+                              candidate=candidate, min_k=min_k, effect=effect)
+        finally:
+            if surface_op is not None:
+                surface_op.restore()
 
     op_record = {
         "candidate": candidate, "op": {"kind": op.kind, **op.payload},

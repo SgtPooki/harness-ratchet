@@ -171,3 +171,33 @@ def test_concurrency_mismatch_refused_pre_sweep(cfg):
     with pytest.raises(ClickError, match="envelope mismatch"):
         click(cfg, runner, "cand-env")
     assert runner.calls == []
+
+
+def test_sigterm_mid_sweep_still_restores(cfg, tmp_path):
+    import os
+    import signal
+
+    from ratchet.click import ClickError
+    from ratchet.runner.ops import RulesAppendOp
+
+    rules = tmp_path / "RULES.md"
+    rules.write_text("# rules\n")
+
+    class SignallingRunner(ScriptedRunner):
+        def __init__(self):
+            super().__init__({})
+            self.rules_path = rules
+            self.models_yml = tmp_path / "models.yml"
+
+        def run_rollout(self, spec):
+            if len(self.calls) == 2:  # mid-sweep, op applied
+                os.kill(os.getpid(), signal.SIGTERM)
+            return super().run_rollout(spec)
+
+    op = ClickOp(kind="rules", payload={"text": "- leftover bait"})
+    with pytest.raises(ClickError, match="signal"):
+        run_click(cfg, candidate="cand-sig", op=op, motivated_by="hi-fast",
+                  runner=SignallingRunner())
+    # the whole point: no fenced block survives the kill
+    assert "hr-mutation" not in rules.read_text()
+    assert rules.read_text() == "# rules\n"
