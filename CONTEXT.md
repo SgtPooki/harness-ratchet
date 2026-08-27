@@ -57,6 +57,23 @@ If a change needs a term to mean something else, change this file first.
   Gated soft axes (v1.1): duration_p50, tokens_out_p50, tokens_in_p50; a
   held-in pass-rate gain also satisfies the improvement requirement.
   **composite pass** — verifier PASS **and** agent exit 0.
+- **rollout outcome** — the four-way classification of one rollout, from the
+  verifier verdict and the agent exit code together. Descriptive only: the
+  gate reads **composite pass** exactly as before, and outcomes never change a
+  verdict.
+  - **solved** — verifier PASS, agent exit 0. The only composite pass.
+  - **wrong** — verifier FAIL, agent exit 0. Terminated with a bad answer.
+  - **overrun** — verifier PASS, agent exit non-zero. The workspace was
+    already correct when the runner killed the agent: it solved the task and
+    could not stop. Still a composite FAIL, because an agent that does not
+    terminate has not done the job.
+  - **aborted** — verifier FAIL, agent exit non-zero. Neither finished nor
+    correct.
+  Recording these separately matters because **overrun** and **wrong** are
+  different failures with different levers, and collapsing them into one zero
+  cost this project a wrong diagnosis: sentinel 04's baseline-v7 drift was
+  read as a solving failure for three cycles when both failing rollouts had
+  already produced a passing workspace (2 of 286 rollouts to date, both there).
 - **manifest** — immutable per-candidate record: decision, evidence, split
   version, rollback target.
 - **ledger** — RESULTS.md; the committed human-readable history.
