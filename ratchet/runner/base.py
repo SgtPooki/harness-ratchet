@@ -41,6 +41,21 @@ class TelemetryRow:
     tokens_in: int
     tokens_out: int
     verify_tail: str
+    # Additive since #23. The gate reads `pass` exactly as before; these
+    # describe the rollout without changing any verdict. verifier_pass is the
+    # verifier's own verdict, which `pass` merges with the agent exit code, so
+    # 'solved it and could not stop' stops looking like 'got it wrong'.
+    # progress_* is the graded reading (#22) where the verifier reports one.
+    verifier_pass: bool | None = None
+    progress_passed: int | None = None
+    progress_total: int | None = None
+
+    @property
+    def outcome(self) -> str | None:
+        from ratchet.kernel.oracle import outcome
+        if self.verifier_pass is None:
+            return None
+        return outcome(self.verifier_pass, self.agent_rc)
 
     def to_json(self) -> dict:
         d = {
@@ -50,6 +65,12 @@ class TelemetryRow:
             "tokens_in": self.tokens_in, "tokens_out": self.tokens_out,
             "verify_tail": self.verify_tail,
         }
+        if self.verifier_pass is not None:
+            d["verifier_pass"] = self.verifier_pass
+            d["outcome"] = self.outcome
+        if self.progress_total is not None:
+            d["progress_passed"] = self.progress_passed
+            d["progress_total"] = self.progress_total
         return d
 
 

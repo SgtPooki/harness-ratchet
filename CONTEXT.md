@@ -57,6 +57,18 @@ If a change needs a term to mean something else, change this file first.
   Gated soft axes (v1.1): duration_p50, tokens_out_p50, tokens_in_p50; a
   held-in pass-rate gain also satisfies the improvement requirement.
   **composite pass** — verifier PASS **and** agent exit 0.
+  **gate v5** narrows that pass-rate clause: the gain must be **material**
+  (some held-in task rises by at least half its rollouts, or the held-in
+  aggregate rises by at least the effect threshold). Under v4 any positive
+  change counted, which let two baselines recorded under an identical
+  harness promote against each other on one rollout flipping. v4 math stays
+  available for replaying historical comparisons under the rules they were
+  decided by.
+- **graded progress** — where a verifier reports counts (pytest), the
+  passed/total reading recorded beside the composite boolean. Descriptive:
+  the gate does not read it. It exists because a task recorded as 0/4 four
+  times can be hiding a stable 13-of-24 with one worse rollout, and three
+  cycles aimed at such a task with no way to tell whether anything moved.
 - **rollout outcome** — the four-way classification of one rollout, from the
   verifier verdict and the agent exit code together. Descriptive only: the
   gate reads **composite pass** exactly as before, and outcomes never change a

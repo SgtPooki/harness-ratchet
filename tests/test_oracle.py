@@ -95,3 +95,58 @@ def test_missing_verifier_rejected(tmp_path, repo):
     res = admit_task(t)
     assert not res.ok
     assert any("no verifier" in r for r in res.reasons)
+
+
+# --- rollout outcome and graded progress (issues #22, #23) ---
+
+def test_verifier_verdict_is_independent_of_agent_exit():
+    from ratchet.kernel.oracle import composite_pass, verifier_passed
+    assert verifier_passed("PASS")
+    # The case that cost a wrong diagnosis: the verifier passed against the
+    # final workspace, but the runner had killed the agent.
+    assert verifier_passed("PASS") and not composite_pass("PASS", 124)
+
+
+def test_outcome_four_way():
+    from ratchet.kernel.oracle import outcome
+    assert outcome(True, 0) == "solved"
+    assert outcome(False, 0) == "wrong"
+    assert outcome(True, 124) == "overrun"
+    assert outcome(False, 124) == "aborted"
+
+
+def test_progress_reads_pytest_counts():
+    from ratchet.kernel.oracle import progress
+    assert progress("11 failed, 13 passed in 140.63s (0:02:20)") == (13, 24)
+    assert progress("24 passed in 3.10s") == (24, 24)
+    assert progress("2 failed, 1 error, 3 passed in 1s") == (3, 6)
+
+
+def test_progress_unknown_is_none_not_zero():
+    from ratchet.kernel.oracle import progress
+    # Verifiers that report only PASS or FAIL have no graded reading, and the
+    # absence must not be recorded as a score of zero.
+    assert progress("PASS") is None
+    assert progress("") is None
+    assert progress("FAIL slugify(\"\") = \"\", want \"n-a\"") is None
+
+
+def test_row_json_omits_unknown_progress_and_keeps_pass_semantics():
+    from ratchet.runner.base import TelemetryRow
+    row = TelemetryRow(ts=1, task="t", rollout=1, model="m", label="l",
+                       passed=False, agent_rc=124, duration_s=9, tokens_in=1,
+                       tokens_out=1, verify_tail="PASS", verifier_pass=True)
+    d = row.to_json()
+    assert d["pass"] is False and d["verifier_pass"] is True
+    assert d["outcome"] == "overrun"
+    assert "progress_passed" not in d and "progress_total" not in d
+
+
+def test_row_json_is_additive_when_nothing_is_known():
+    from ratchet.runner.base import TelemetryRow
+    row = TelemetryRow(ts=1, task="t", rollout=1, model="m", label="l",
+                       passed=True, agent_rc=0, duration_s=9, tokens_in=1,
+                       tokens_out=1, verify_tail="PASS")
+    assert set(row.to_json()) == {
+        "ts", "task", "rollout", "model", "label", "pass", "agent_rc",
+        "duration_s", "tokens_in", "tokens_out", "verify_tail"}

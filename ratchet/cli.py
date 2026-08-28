@@ -272,10 +272,32 @@ def cmd_baseline_set_active(args) -> int:
 
 def cmd_probe(args) -> int:
     from ratchet.runner.omp import OmpRunner
-    from ratchet.runner.probe import probe_channel
+    from ratchet.runner.probe import probe_channel, probe_config_key
 
     cfg = _load_cfg(args)
     runner = OmpRunner()
+    if args.channel == "config-key":
+        missing = [f"--{n}" for n in ("key", "value", "observable")
+                   if getattr(args, n) is None]
+        if missing:
+            print(f"probe config-key needs {', '.join(missing)}", file=sys.stderr)
+            return 2
+        result = probe_config_key(
+            runner, args.key, _parse_value(args.value), args.observable,
+            model=cfg.model, timeout_s=cfg.timeout_s,
+            out_dir=cfg.runs_dir / "probes",
+            standing_overlays=cfg.standing_overlays)
+        verdict = "LIVE" if result.observed else "DEAD"
+        print(f"config key {args.key}: {verdict} "
+              f"(observable {result.token!r} seen {result.control_count} times "
+              f"without it, {result.probe_count} with it; agent rc={result.rc}, "
+              f"record in {cfg.runs_dir / 'probes'})")
+        if not result.observed:
+            print("  a DEAD key means an A/B using it would measure nothing "
+                  "while the gate recorded a verdict; omp accepts unknown keys "
+                  "and wrong types silently, so check spelling and value type",
+                  file=sys.stderr)
+        return 0 if result.observed else 1
     result = probe_channel(runner, args.channel, model=cfg.model,
                            timeout_s=cfg.timeout_s,
                            out_dir=cfg.runs_dir / "probes",
@@ -628,7 +650,16 @@ def main(argv=None) -> int:
     p_click.set_defaults(fn=cmd_click)
 
     p_probe = sub.add_parser("probe", help="channel liveness: observable-token test")
-    p_probe.add_argument("channel", choices=["rules", "append-system-prompt"])
+    p_probe.add_argument("channel",
+                         choices=["rules", "append-system-prompt", "config-key"])
+    p_probe.add_argument("--key", default=None,
+                         help="config-key: the dotted config key to probe")
+    p_probe.add_argument("--value", default=None,
+                         help="config-key: a deliberately extreme value that "
+                              "should change behaviour observably")
+    p_probe.add_argument("--observable", default=None,
+                         help="config-key: substring counted in the agent "
+                              "stream; liveness is a DIFFERENCE in its count")
     p_probe.add_argument("--config", default=None, help="ratchet.toml path")
     p_probe.set_defaults(fn=cmd_probe)
 

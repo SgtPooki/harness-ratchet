@@ -11,6 +11,7 @@ amended: the list is hardcoded here and never read from pack payload, so a
 pack cannot self-declare its way past the sabotage requirement).
 """
 
+import re
 import shutil
 import subprocess
 import sys
@@ -73,11 +74,55 @@ def run_verifier_capture(task_dir: Path, workspace: Path) -> str:
     return r.stdout.decode(errors="replace")
 
 
+def verifier_passed(verify_output: str) -> bool:
+    """The verifier's own verdict, independent of how the agent exited."""
+    return any(line == "PASS" for line in verify_output.splitlines())
+
+
 def composite_pass(verify_output: str, agent_rc: int) -> bool:
     """Composite pass: verifier prints a bare PASS line AND the agent exited 0
     (a timeout that happens to leave a passing tree is not a pass — the mutB
     lesson, ported from bin/run.sh)."""
-    return agent_rc == 0 and any(line == "PASS" for line in verify_output.splitlines())
+    return agent_rc == 0 and verifier_passed(verify_output)
+
+
+def outcome(verifier_pass: bool, agent_rc: int) -> str:
+    """The CONTEXT.md four-way rollout outcome (issue #23).
+
+    Descriptive only: composite_pass stays the verdict the gate reads, and
+    'overrun' remains a composite failure. Separating it from 'wrong' matters
+    because they are different failures with different levers, and collapsing
+    them cost this project a wrong diagnosis on a sentinel.
+    """
+    if verifier_pass:
+        return "solved" if agent_rc == 0 else "overrun"
+    return "wrong" if agent_rc == 0 else "aborted"
+
+
+# "11 failed, 13 passed in 140.63s", "24 passed in 3.10s". Verifiers that
+# report only PASS or FAIL yield no counts, and that is reported as unknown
+# rather than as zero.
+_PYTEST_COUNT = re.compile(r"(\d+)\s+(passed|failed|errors?|skipped|xfailed|xpassed)\b")
+
+
+def progress(verify_output: str) -> tuple[int, int] | None:
+    """Graded progress as (passed, total) when the verifier reports it (issue #22).
+
+    The composite boolean collapses every degree of wrongness into one zero.
+    Where the verifier is pytest the finer signal is already in its output and
+    was simply being discarded: a task recorded as 0/4 four times over can be
+    hiding a stable 13-of-24 with one clearly worse rollout.
+    """
+    counts: dict[str, int] = {}
+    for n, kind in _PYTEST_COUNT.findall(verify_output or ""):
+        kind = "error" if kind.startswith("error") else kind
+        counts[kind] = counts.get(kind, 0) + int(n)
+    if not counts:
+        return None
+    total = sum(counts.values())
+    if not total:
+        return None
+    return counts.get("passed", 0) + counts.get("xfailed", 0), total
 
 
 def admit_task(task_dir: Path) -> AdmissionResult:

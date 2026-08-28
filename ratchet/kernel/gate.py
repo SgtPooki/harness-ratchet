@@ -1,8 +1,10 @@
 """The ratchet's pawl: mechanical promote/reject for a candidate vs baseline.
 
-Line-faithful port of bin/gate.py at gate_version 4 (issue #2, point 6:
-port, don't redesign; the math must reproduce the frozen golden fixtures
-in tests/fixtures/gate/expected.json exactly).
+v4 was a line-faithful port of bin/gate.py (issue #2, point 6: port, don't
+redesign) and its math must still reproduce the frozen golden fixtures in
+tests/fixtures/gate/expected.json exactly; pass gate_version=4 to replay it.
+v5 changes exactly one clause, rule 4's pass branch, and is specified in
+tests/fixtures/gate_v5/SPEC.md with fixtures hand-authored from that spec.
 
 PROMOTE requires ALL of:
   1. coverage: every held_in and held_out task present in BOTH sides with
@@ -14,7 +16,11 @@ PROMOTE requires ALL of:
      axis (duration_p50, tokens_out_p50, tokens_in_p50) improves by >=
      effect (relative) on held_in aggregate, with no soft axis regressing
      by more than effect on held_in OR held_out (held-out is a floor,
-     never a target);
+     never a target). Under v5 the pass-rate gain must also be MATERIAL:
+     some task rises by >= material_task_delta, or the aggregate rises by
+     >= effect relative. Under v4 any positive change counted, which let
+     two baselines recorded under an identical harness promote against
+     each other on a single rollout flipping;
   5. sentinel report is advisory (recorded, never gates).
 
 Data problems (missing results, immutable-manifest overwrite) raise
@@ -25,8 +31,14 @@ import json
 import statistics
 from pathlib import Path
 
-GATE_VERSION = 4
+GATE_VERSION = 5
 SOFT_AXES = ("duration_p50", "tokens_out_p50", "tokens_in_p50")
+
+# v5 rule 4: a held_in pass-rate gain must be MATERIAL to count as improvement.
+# Material means the aggregate strictly rises AND either some task rises by at
+# least this much, or the aggregate rises by at least `effect` relative.
+# See tests/fixtures/gate_v5/SPEC.md for the reasoning and the regression case.
+MATERIAL_TASK_DELTA = 0.5
 
 
 class GateDataError(Exception):
@@ -87,8 +99,16 @@ def reject_certain(split: dict, base: dict[str, list[dict]],
 
 def decide(split: dict, base: dict[str, list[dict]], cand: dict[str, list[dict]],
            *, baseline_label: str, candidate_label: str, min_k: int = 2,
-           effect: float = 0.15, rollback_target: str = "") -> tuple[dict, int]:
-    """Run the v4 gate math. Returns (manifest, exit_code): 0 PROMOTE, 1 REJECT."""
+           effect: float = 0.15, rollback_target: str = "",
+           gate_version: int = GATE_VERSION,
+           material_task_delta: float = MATERIAL_TASK_DELTA) -> tuple[dict, int]:
+    """Run the gate math. Returns (manifest, exit_code): 0 PROMOTE, 1 REJECT.
+
+    gate_version selects the improvement clause: 4 counts any positive held_in
+    pass-rate change, 5 requires it to be material. Pass 4 to replay historical
+    comparisons under the math they were decided by; everything else is
+    identical between the two versions.
+    """
     reasons, evidence = [], {}
 
     # 1. coverage
@@ -127,7 +147,25 @@ def decide(split: dict, base: dict[str, list[dict]], cand: dict[str, list[dict]]
         b_pass = sum(v["pass_rate"] for v in b_in.values())
         c_pass = sum(v["pass_rate"] for v in c_in.values())
         if c_pass > b_pass:
-            improved.append("pass_rate")
+            if gate_version < 5:
+                improved.append("pass_rate")
+            else:
+                # v5: any positive change was promotable on noise, so a single
+                # rollout flipping on a single task could raise the floor
+                # permanently. Require a task to move by half its rollouts, or
+                # the aggregate to clear the same bar the soft axes clear.
+                best_task_delta = max(
+                    (c_in[t]["pass_rate"] - b_in[t]["pass_rate"]
+                     for t in b_in if t in c_in), default=0.0)
+                rel = (c_pass - b_pass) / b_pass if b_pass > 0 else float("inf")
+                evidence["pass_rate"] = {
+                    "baseline": b_pass, "candidate": c_pass,
+                    "best_task_delta": round(best_task_delta, 4),
+                    "rel_improvement": round(rel, 4) if rel != float("inf") else None,
+                    "material_task_delta": material_task_delta,
+                }
+                if best_task_delta >= material_task_delta or rel >= effect:
+                    improved.append("pass_rate")
     if b_in and c_in and not any(r.startswith("coverage") for r in reasons):
         for axis in SOFT_AXES:
             b_tot = sum(v[axis] for v in b_in.values())
@@ -165,7 +203,7 @@ def decide(split: dict, base: dict[str, list[dict]], cand: dict[str, list[dict]]
 
     decision = "PROMOTE" if not reasons else "REJECT"
     manifest = {
-        "gate_version": GATE_VERSION, "split_version": split["split_version"],
+        "gate_version": gate_version, "split_version": split["split_version"],
         "baseline": baseline_label, "candidate": candidate_label,
         "min_k": min_k, "effect_threshold": effect,
         "decision": decision, "reasons": reasons, "improved_axes": improved,

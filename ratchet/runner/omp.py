@@ -21,7 +21,12 @@ import tempfile
 import time
 from pathlib import Path
 
-from ratchet.kernel.oracle import composite_pass, run_verifier_capture
+from ratchet.kernel.oracle import (
+    composite_pass,
+    progress,
+    run_verifier_capture,
+    verifier_passed,
+)
 from ratchet.runner.base import RolloutSpec, TelemetryRow
 
 # omp appends --append-system-prompt text unlabeled at the tail of its
@@ -130,12 +135,16 @@ class OmpRunner:
             shutil.rmtree(work, ignore_errors=True)
 
         tok_in, tok_out = extract_tokens(rdir / "stream.jsonl")
+        prog = progress(vout)
         row = TelemetryRow(
             ts=int(time.time()), task=spec.task_id, rollout=spec.rollout,
             model=spec.model, label=spec.label,
             passed=composite_pass(vout, rc), agent_rc=rc, duration_s=dur,
             tokens_in=tok_in, tokens_out=tok_out,
             verify_tail="\n".join(vout.splitlines()[-3:])[:400],
+            verifier_pass=verifier_passed(vout),
+            progress_passed=prog[0] if prog else None,
+            progress_total=prog[1] if prog else None,
         )
         results = spec.run_root / "results.jsonl"
         with open(results, "a") as fh:

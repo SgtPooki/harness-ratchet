@@ -42,9 +42,12 @@ def test_golden_pair(pair, split, gate_fixtures):
     base_label, cand_label = pair.split("__")
     base = load_results(gate_fixtures / "runs" / base_label / "results.jsonl")
     cand = load_results(gate_fixtures / "runs" / cand_label / "results.jsonl")
+    # Replayed as v4 on purpose: these fixtures were frozen from the v4 math,
+    # so they are the regression test for v4 remaining available and unchanged,
+    # not for whatever the current default version does.
     manifest, code = decide(
         split, base, cand, baseline_label=base_label, candidate_label=cand_label,
-        min_k=2, effect=0.15, rollback_target=PINNED_COMMIT,
+        min_k=2, effect=0.15, rollback_target=PINNED_COMMIT, gate_version=4,
     )
     # round-trip through JSON so float/int representation matches the fixture
     assert json.loads(json.dumps(manifest)) == expected["manifest"]

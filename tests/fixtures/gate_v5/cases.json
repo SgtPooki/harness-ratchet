@@ -1,0 +1,72 @@
+{
+  "_comment": "Hand-authored from SPEC.md before the v5 implementation existed. Each case gives per-task (pass_rate-producing) rollout outcomes and the verdict derived by reading the spec and doing the arithmetic by hand. Soft-axis numbers are held identical between arms unless a case says otherwise, so the pass clause is what is under test. Never regenerate from code.",
+  "defaults": {"k": 4, "effect": 0.15, "material_task_delta": 0.5},
+  "split": {
+    "split_version": 99,
+    "held_in": ["hi1", "hi2", "hi3", "hi4"],
+    "held_out": ["ho1"],
+    "sentinel": []
+  },
+  "cases": [
+    {
+      "name": "null_identical_harness",
+      "why": "The real regression case: one task flips by a single rollout, every soft axis is flat. Aggregate 2.75 -> 3.00 is +9.1 percent relative, under the 0.15 effect; the biggest per-task delta is 0.25, under 0.5. Neither disjunct fires.",
+      "baseline": {"hi1": 4, "hi2": 3, "hi3": 4, "hi4": 0, "ho1": 4},
+      "candidate": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "expect_v5": "REJECT",
+      "expect_v4": "PROMOTE",
+      "expect_reason_contains": "no soft axis improved"
+    },
+    {
+      "name": "real_fix_half_the_rollouts",
+      "why": "A mutation that takes a failing task from 0/4 to 2/4. Per-task delta 0.5 meets material_task_delta exactly, and the rule is >=, so it fires.",
+      "baseline": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "candidate": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 2, "ho1": 4},
+      "expect_v5": "PROMOTE",
+      "expect_v4": "PROMOTE"
+    },
+    {
+      "name": "real_fix_one_rollout_only",
+      "why": "The acknowledged limitation. 0/4 to 1/4 is delta 0.25 per task and +6.25 percent aggregate (4.00 -> 4.25). Neither disjunct fires, so it does not promote on the pass axis. Recorded so the cost of the rule is visible in the fixtures, not just in prose.",
+      "baseline": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "candidate": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 1, "ho1": 4},
+      "expect_v5": "REJECT",
+      "expect_v4": "PROMOTE"
+    },
+    {
+      "name": "broad_small_gains_clear_the_aggregate_bar",
+      "why": "Three tasks each rise by one rollout from a low base: 1.00 -> 1.75 is +75 percent relative, clearing 0.15, while no single per-task delta reaches 0.5. The aggregate disjunct is what keeps this promotable.",
+      "baseline": {"hi1": 1, "hi2": 1, "hi3": 1, "hi4": 1, "ho1": 4},
+      "candidate": {"hi1": 2, "hi2": 2, "hi3": 2, "hi4": 1, "ho1": 4},
+      "expect_v5": "PROMOTE",
+      "expect_v4": "PROMOTE"
+    },
+    {
+      "name": "regression_still_hard_rejects",
+      "why": "Rule 3 is untouched by v5: a per-task held_in drop rejects regardless of how material any gain elsewhere is.",
+      "baseline": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "candidate": {"hi1": 2, "hi2": 4, "hi3": 4, "hi4": 4, "ho1": 4},
+      "expect_v5": "REJECT",
+      "expect_v4": "REJECT",
+      "expect_reason_contains": "held_in regression"
+    },
+    {
+      "name": "held_out_floor_still_hard_rejects",
+      "why": "Rule 2 is untouched: a held_out drop rejects even with a material held_in gain.",
+      "baseline": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "candidate": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 4, "ho1": 2},
+      "expect_v5": "REJECT",
+      "expect_v4": "REJECT",
+      "expect_reason_contains": "held_out regression"
+    },
+    {
+      "name": "soft_axis_still_promotes_alone",
+      "why": "A candidate with no pass change at all still promotes on a soft-axis improvement past the effect threshold. v5 changes only the pass branch.",
+      "baseline": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "candidate": {"hi1": 4, "hi2": 4, "hi3": 4, "hi4": 0, "ho1": 4},
+      "duration_scale": 0.5,
+      "expect_v5": "PROMOTE",
+      "expect_v4": "PROMOTE"
+    }
+  ]
+}

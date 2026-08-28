@@ -9,6 +9,7 @@ import pytest
 
 from ratchet.cli import main
 from ratchet.config import CONFIG_ENV, load_config
+from ratchet.kernel.gate import GATE_VERSION
 from tests.test_runner import FAKE_OMP, STREAM
 
 
@@ -94,7 +95,7 @@ def test_sweep_and_set_active(tmp_path, repo, fake_omp_env, monkeypatch, capsys)
 
     assert main(["baseline", "set-active", "b1", "--config", cfgp]) == 0
     reg = json.loads((bank / "era" / "ACTIVE_BASELINE").read_text())
-    assert reg["label"] == "b1" and reg["gate_version"] == 4
+    assert reg["label"] == "b1" and reg["gate_version"] == GATE_VERSION
     assert reg["split_version"] == 0
     assert reg["concurrency"] == 1  # #12 decision 6: recorded mechanically
     assert reg["model"] == "vllm/homelab-default"
@@ -137,3 +138,36 @@ def test_probe_dead_channel_exit_1(tmp_path, fake_omp_env, capsys, monkeypatch):
     assert main(["probe", "append-system-prompt",
                  "--config", str(bank / "ratchet.toml")]) == 1
     assert "DEAD" in capsys.readouterr().out
+
+
+def test_probe_config_key_requires_its_arguments(tmp_path, capsys):
+    bank = tmp_path / "bank"
+    assert main(["init", str(bank)]) == 0
+    cfgp = str(bank / "ratchet.toml")
+    assert main(["probe", "config-key", "--config", cfgp]) == 2
+    err = capsys.readouterr().err
+    assert "--key" in err and "--value" in err and "--observable" in err
+
+
+def test_probe_config_key_reports_dead_when_behaviour_does_not_change(
+        tmp_path, fake_omp_env, capsys):
+    # The fake omp emits the same canned stream either way, which is exactly
+    # what a key that does not land looks like: accepted, and inert.
+    bank = tmp_path / "bank"
+    assert main(["init", str(bank)]) == 0
+    rc = main(["probe", "config-key", "--key", "compaction.notARealKey",
+               "--value", "5000", "--observable", "compact",
+               "--config", str(bank / "ratchet.toml")])
+    assert rc == 1
+    assert "DEAD" in capsys.readouterr().out
+    rec = json.loads(next((bank / "runs" / "probes")
+                          .glob("*compaction-notARealKey.json")).read_text())
+    assert rec["observed"] is False
+    assert rec["control_count"] == rec["probe_count"]
+    assert rec["method"] == "extreme-value-observable"
+
+
+def test_probe_config_key_overlay_nests_dotted_keys(tmp_path):
+    from ratchet.runner.probe import _overlay_for
+    p = _overlay_for("compaction.thresholdTokens", 5000, tmp_path / "o.yml")
+    assert p.read_text() == 'compaction:\n  thresholdTokens: 5000\n'
